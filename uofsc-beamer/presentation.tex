@@ -23,7 +23,6 @@
   \end{frame}
 }
 
-% ====== OUTLINE ======
 \begin{frame}{Outline}
   \tableofcontents
 \end{frame}
@@ -34,57 +33,74 @@
 
 \begin{frame}{Papers Under Review}
   \begin{columns}[T]
-    \begin{column}{0.55\textwidth}
-      \textbf{Three publications} (USC Mech.\ Eng.):
+    \begin{column}{0.52\textwidth}
+      \textbf{Three publications} (USC Mech.\ Eng., ONR-funded):
+      \vspace{0.3em}
       \begin{enumerate}
-        \item \textbf{M.S.\ Thesis} (2023) --- WVF \& LF
-        \item \textbf{IEEE OCEANS 2024} --- Aquatic gradient computation
-        \item \textbf{IEEE OCEANS 2025} --- Multi-scale edge determination
+        \item \textbf{M.S.\ Thesis} (Fall 2023)\\
+              {\small WVF \& LF for Image Gradient Computation}
+        \item \textbf{IEEE OCEANS 2024}\\
+              {\small WVF \& LF in Aquatic Environment}
+        \item \textbf{IEEE OCEANS 2025}\\
+              {\small Multi-Scale Edge Determination + Gradient Orientation}
       \end{enumerate}
       \vspace{0.3em}
+      {\small Advisor: Yi Wang \quad|\quad Reader: Yan Tong}\\
       {\small ONR Contract N00014-22-C-1011}
     \end{column}
-    \begin{column}{0.42\textwidth}
-      \textbf{Claims:}
+    \begin{column}{0.45\textwidth}
+      \textbf{Core claims:}
       \begin{itemize}
-        \item Outperform Sobel, Prewitt, Canny
-        \item Outperform DexiNed, TEED, EDTER
-        \item $<$1° angular accuracy
+        \item WVF/LF outperform Sobel, Prewitt, Canny
+        \item Outperform DexiNed, TEED, EDTER, BDCN
+        \item $<$1\textdegree{} angular accuracy via cubic splines
         \item Superior in low-SNR aquatic scenes
         \item ML is ``unreliable and dangerous''
       \end{itemize}
+      \vspace{0.3em}
+      \textbf{Our approach:} re-implement, benchmark on BSDS500/UDED, and verify independently on Theia HPC (A100 GPUs).
     \end{column}
   \end{columns}
 \end{frame}
 
 \begin{frame}{How the WVF Works}
   \begin{columns}[T]
-    \begin{column}{0.45\textwidth}
-      2D Taylor expansion at each pixel:
+    \begin{column}{0.44\textwidth}
+      \textbf{2D Taylor expansion} at each pixel:
+      \vspace{-0.3em}
       \begin{equation*}
-        f(x_i, y_i) \approx f^0 + f_x^0 x + f_y^0 y + \frac{f_{xx}^0 x^2}{2} + \cdots
+        f(x_i, y_i) \approx f^0 + f_x^0 x + f_y^0 y + \tfrac{f_{xx}^0}{2} x^2 + \cdots
       \end{equation*}
+      \vspace{-0.5em}
       \begin{itemize}
-        \item $N_p$ neighbors in circular region
-        \item Least-squares solve per orientation
-        \item Line Filter chains WVF along a line
-        \item Papers use $N_p = 250$, $m = 14$
+        \item Select $N_p$ neighbors in circular region
+        \item Build Vandermonde matrix $\mathbf{A}$
+        \item Solve $\mathbf{z} = (\mathbf{A}^T\mathbf{A})^{-1}\mathbf{A}^T\mathbf{b}$
+        \item Rotate local frame to $N_s$ orientations
+        \item Keep max normal derivative $\rightarrow$ gradient
+        \item \textbf{Line Filter:} chain WVFs along a line with Gaussian weighting
       \end{itemize}
     \end{column}
-    \begin{column}{0.52\textwidth}
+    \begin{column}{0.53\textwidth}
+      \vspace{0.5em}
       \begin{tabular}{lcc}
         \toprule
-        & \textbf{Sobel} & \textbf{WVF} \\
+        & \textbf{Sobel 3$\times$3} & \textbf{WVF} \\
         \midrule
-        Pixels used & 9 & 250 \\
-        Kernel size & 3$\times$3 & $\sim$18px radius \\
-        Orientations & 2 (x, y) & $N_s$ (any) \\
-        Runtime & $\mu$s & seconds \\
+        Pixels per estimate & 9 & 250 \\
+        Spatial extent & 3$\times$3 & $\sim$18px radius \\
+        Orientations & 2 (x, y) & $N_s$ (any angle) \\
+        Adaptable size & No & Yes \\
+        Angle accuracy & arctan only & spline-fit \\
+        Runtime/pixel & $\sim$$\mu$s & $\sim$seconds \\
         \bottomrule
       \end{tabular}
       \vspace{0.5em}
 
-      {\small \textbf{28$\times$ more data} per pixel---but only compared against 3$\times$3.}
+      \textbf{Key issue:} WVF uses \textbf{28$\times$ more data} per pixel than Sobel, but the papers \textit{only} compare against 3$\times$3 operators.
+
+      \vspace{0.3em}
+      {\small A fair test would compare against Sobel at 9$\times$9 or 15$\times$15.}
     \end{column}
   \end{columns}
 \end{frame}
@@ -94,19 +110,22 @@
 \section{Math Verification}
 
 \begin{frame}{Taylor Expansion Verified}
+  \vspace{-0.3em}
   \begin{center}
-    \includegraphics[width=0.88\textwidth]{figures/taylor_verification.pdf}
+    \includegraphics[width=\textwidth, height=0.62\textheight, keepaspectratio]{figures/taylor_verification.pdf}
   \end{center}
-  \vspace{-0.5em}
-  {\small All derivatives recovered to $\sim10^{-15}$. \textbf{The math is sound.}}
+  \vspace{-0.3em}
+  Applied WVF ($N_p=25$, order 4) to known polynomial $f(x,y) = 3 + 2x - 1.5y + 0.5x^2 + 0.3y^2 - 0.2xy$.\\
+  All six derivatives recovered to machine precision ($\sim$$10^{-15}$). \textbf{The core math is correct.}
 \end{frame}
 
 \begin{frame}{Condition Number Growth}
+  \vspace{-0.3em}
   \begin{center}
-    \includegraphics[width=0.88\textwidth]{figures/condition_numbers.pdf}
+    \includegraphics[width=\textwidth, height=0.62\textheight, keepaspectratio]{figures/condition_numbers.pdf}
   \end{center}
-  \vspace{-0.5em}
-  {\small $\kappa(\mathbf{A}^T\mathbf{A}) \sim 10^5$ at $N_p = 250$. Not discussed in the publications.}
+  \vspace{-0.3em}
+  $\kappa(\mathbf{A}^T\mathbf{A})$ reaches $\sim$$10^5$ at $N_p = 250$ (the value used in the papers), meaning $\sim$5 digits of precision lost per solve. Condition does \textit{not} decrease monotonically with $N_p$---adding pixels beyond $N_p \approx 50$ worsens stability. \textbf{Not discussed in any publication.}
 \end{frame}
 
 % ============================================================
@@ -114,43 +133,48 @@
 \section{Benchmark Results}
 
 \begin{frame}{BSDS500: Larger Sobel Wins}
+  \vspace{-0.3em}
   \begin{center}
-    \includegraphics[width=0.95\textwidth]{figures/bsds500_ods.pdf}
+    \includegraphics[width=\textwidth, height=0.63\textheight, keepaspectratio]{figures/bsds500_ods.pdf}
   \end{center}
-  \vspace{-0.5em}
-  {\small Sobel 15$\times$15 beats DexiNed and TEED at 30$\times$ less cost.}
+  \vspace{-0.3em}
+  50 test images on A100 GPU. \textbf{Sobel 15$\times$15 (ODS=0.549) outperforms DexiNed (0.495) and TEED (0.470)} while being 30$\times$ faster. WVF at $N_p=15$ on 64$\times$64 crops: ODS=0.000 at 9 seconds/image.
 \end{frame}
 
 \begin{frame}{Kernel Size Scaling}
+  \vspace{-0.3em}
   \begin{center}
-    \includegraphics[width=0.88\textwidth]{figures/kernel_scaling.pdf}
+    \includegraphics[width=\textwidth, height=0.63\textheight, keepaspectratio]{figures/kernel_scaling.pdf}
   \end{center}
-  \vspace{-0.5em}
-  {\small ODS rises monotonically with kernel size. Papers never test beyond 3$\times$3.}
+  \vspace{-0.3em}
+  ODS rises monotonically with Sobel kernel size on BSDS500 (left). On UDED (right), Sobel 9$\times$9 surpasses DexiNed. The dashed lines show ML model performance---Sobel crosses them at kernel sizes the papers never tested.
 \end{frame}
 
 \begin{frame}{UDED Results}
+  \vspace{-0.3em}
   \begin{center}
-    \includegraphics[width=0.85\textwidth]{figures/uded_comparison.pdf}
+    \includegraphics[width=\textwidth, height=0.63\textheight, keepaspectratio]{figures/uded_comparison.pdf}
   \end{center}
-  \vspace{-0.5em}
-  {\small Sobel 9$\times$9 matches DexiNed (0.904 vs 0.901) while 40$\times$ faster.}
+  \vspace{-0.3em}
+  Same dataset the original papers use. Sobel 9$\times$9 achieves ODS=0.904 vs DexiNed's 0.901 while being \textbf{40$\times$ faster} (12ms vs 485ms). All methods within 3\% of each other---differences may not be statistically significant.
 \end{frame}
 
 \begin{frame}{Runtime}
+  \vspace{-0.3em}
   \begin{center}
-    \includegraphics[width=0.85\textwidth]{figures/runtime_comparison.pdf}
+    \includegraphics[width=\textwidth, height=0.63\textheight, keepaspectratio]{figures/runtime_comparison.pdf}
   \end{center}
-  \vspace{-0.5em}
-  {\small WVF is $\sim$10,000$\times$ slower. No timing in any of the three papers.}
+  \vspace{-0.3em}
+  Log scale. WVF is $\sim$\textbf{10,000$\times$ slower} than Sobel even with minimal $N_p=15$ on 32$\times$32 crops. Green dashed line = 30fps real-time threshold. \textbf{No timing analysis appears in any of the three publications}---a critical gap for methods proposed for autonomous vehicles.
 \end{frame}
 
 \begin{frame}{Compute Fairness}
+  \vspace{-0.3em}
   \begin{center}
-    \includegraphics[width=0.82\textwidth]{figures/compute_fairness.pdf}
+    \includegraphics[width=\textwidth, height=0.63\textheight, keepaspectratio]{figures/compute_fairness.pdf}
   \end{center}
-  \vspace{-0.5em}
-  {\small Performance advantage is from more data, not better algorithm.}
+  \vspace{-0.3em}
+  Bubble size $\propto$ log(runtime). Sobel 15$\times$15 uses 177 pixels vs WVF's 250---comparable data but 1000$\times$ faster with higher ODS. \textbf{The performance advantage comes from using more data, not from a better algorithm.}
 \end{frame}
 
 % ============================================================
@@ -158,11 +182,13 @@
 \section{Angle Detection}
 
 \begin{frame}{Arctan Errors Validate WVF Motivation}
+  \vspace{-0.3em}
   \begin{center}
-    \includegraphics[width=0.88\textwidth]{figures/angle_errors.pdf}
+    \includegraphics[width=\textwidth, height=0.60\textheight, keepaspectratio]{figures/angle_errors.pdf}
   \end{center}
-  \vspace{-0.5em}
-  {\small 1--53° errors with Sobel arctan. \textbf{Orientation-specific gradients are genuinely better here.}}
+  \vspace{-0.3em}
+  Sobel arctan produces \textbf{1--53\textdegree{} errors}. The 0\textdegree{} case catastrophically fails because x/y decomposition cannot represent a horizontal edge normal. Errors at diagonal angles (2--5\textdegree) propagate into NMS, causing broken edges.\\[0.2em]
+  \textbf{This validates the WVF's core motivation}---orientation-specific gradients genuinely improve angular accuracy. Larger Sobel kernels \textit{cannot} fix this.
 \end{frame}
 
 % ============================================================
@@ -170,27 +196,30 @@
 \section{Maritime Replication}
 
 \begin{frame}{SNR Robustness}
+  \vspace{-0.5em}
   \begin{center}
-    \includegraphics[width=0.92\textwidth]{figures/snr_comparison.pdf}
+    \includegraphics[width=\textwidth, height=0.68\textheight, keepaspectratio]{figures/snr_comparison.pdf}
   \end{center}
   \vspace{-0.5em}
-  {\small Larger kernels suppress noise just as effectively as the WVF.}
+  {\small Synthetic multi-line images at SNR=2.0, 1.0, 0.75, 0.5. Columns: original, Sobel 3$\times$3, Sobel 15$\times$15, Canny $\sigma$=2, LoG $\sigma$=2. Larger kernels suppress noise effectively---same mechanism as WVF but far cheaper.}
 \end{frame}
 
 \begin{frame}{Maritime F-Scores}
+  \vspace{-0.3em}
   \begin{center}
-    \includegraphics[width=0.85\textwidth]{figures/maritime_heatmap.pdf}
+    \includegraphics[width=\textwidth, height=0.63\textheight, keepaspectratio]{figures/maritime_heatmap.pdf}
   \end{center}
-  \vspace{-0.5em}
-  {\small Dark Horizon (F $<$ 0.08) is where WVF could genuinely help.}
+  \vspace{-0.3em}
+  Six synthetic scenes replicating the papers' exact conditions: horizon with boat/buoys, cable in water, wave fields, underexposed scenes. \textbf{Dark Horizon} (F $<$ 0.08 for all) is where WVF's orientation-specific computation could provide genuine benefit.
 \end{frame}
 
 \begin{frame}{Maritime Edge Maps}
+  \vspace{-0.3em}
   \begin{center}
-    \includegraphics[width=0.95\textwidth]{figures/maritime_visual.pdf}
+    \includegraphics[width=\textwidth, height=0.63\textheight, keepaspectratio]{figures/maritime_visual.pdf}
   \end{center}
-  \vspace{-0.5em}
-  {\small Sobel 3$\times$3 amplifies wave noise; 15$\times$15 suppresses it.}
+  \vspace{-0.3em}
+  Synthetic scene: boat, buoy, water texture with waves. Sobel 3$\times$3 amplifies wave noise, obscuring the buoy. Sobel 15$\times$15 suppresses water texture while preserving the horizon line and object edges. Canny misses the buoy entirely.
 \end{frame}
 
 % ============================================================
@@ -200,56 +229,67 @@
 \begin{frame}{Claims vs Evidence}
   \begin{columns}[T]
     \begin{column}{0.48\textwidth}
-      {\small \color{red}$\times$} ``ML is unreliable and dangerous''\\
-      {\footnotesize Cites only 2010/2016 sources.}\\[0.7em]
-      {\small \color{red}$\times$} ``Divert efforts'' to image processing\\
-      {\footnotesize Scope is aquatic edge detection only.}\\[0.7em]
-      {\small \color{orange}$\sim$} Outperforms SOTA ML\\
-      {\footnotesize True on $n=4$ dataset. No statistical power.}\\[0.7em]
-      {\small \color{green!60!black}\checkmark} $<$1° angular accuracy\\
-      {\footnotesize Valid on synthetic data. No error bounds.}
+      \textbf{Evaluated claims:}
+      \vspace{0.3em}
+
+      {\color{red}$\boldsymbol{\times}$} \textbf{``ML is unreliable and dangerous''}\\
+      {\small Cites 2010/2016 sources only. Ignores modern ML robustness and safety advances.}\\[0.5em]
+
+      {\color{red}$\boldsymbol{\times}$} \textbf{``Divert efforts'' to image processing}\\
+      {\small Scope is aquatic edge detection. Cannot generalize to autonomous driving.}\\[0.5em]
+
+      {\color{orange}$\boldsymbol{\sim}$} \textbf{WVF outperforms SOTA ML}\\
+      {\small True on $n=4$ aquatic dataset. No statistical power ($p$-values, CIs absent).}\\[0.5em]
+
+      {\color{green!60!black}$\boldsymbol{\checkmark}$} \textbf{$<$1\textdegree{} angular accuracy}\\
+      {\small Empirically valid on synthetic data. Lacks theoretical error bounds.}
     \end{column}
     \begin{column}{0.48\textwidth}
-      \textbf{Statistical issues:}
+      \textbf{Methodological gaps:}
+      \vspace{0.3em}
       \begin{itemize}
-        \item 4-image dataset, hand-labeled
-        \item No confidence intervals
-        \item DexiNed/TEED trained on BIPED test set
-        \item No Gaussian-smoothed Sobel baseline
+        \item \textbf{4-image aquatic dataset}---hand-labeled by authors, no inter-annotator agreement, no confidence intervals
+        \item \textbf{BIPED test split}---DexiNed/TEED trained on BIPED, giving them a distribution advantage (makes WVF results less impressive)
+        \item \textbf{No Gaussian-smoothed Sobel}---the most obvious missing baseline
+        \item \textbf{No LoG, structured forests, or phase congruency} comparisons
+        \item \textbf{Significant text overlap} across all three publications (IEEE papers $\approx$ condensed thesis chapters)
       \end{itemize}
     \end{column}
   \end{columns}
 \end{frame}
 
 \begin{frame}{Scorecard}
+  \vspace{-0.3em}
   \begin{center}
-    \includegraphics[width=0.85\textwidth]{figures/summary_scorecard.pdf}
+    \includegraphics[width=\textwidth, height=0.63\textheight, keepaspectratio]{figures/summary_scorecard.pdf}
   \end{center}
-  \vspace{-0.5em}
-  {\small Math: 10/10. Angular accuracy: 9/10. Experimental fairness: 3/10. Runtime: 1/10.}
+  \vspace{-0.3em}
+  Green = strong (7--10), yellow = moderate (4--6), red = weak (1--3). Math is excellent. Angular accuracy and low-SNR performance are genuine strengths. Experimental fairness, runtime analysis, and statistical validity are the major gaps.
 \end{frame}
 
 \begin{frame}{Strengths \& Weaknesses}
   \begin{columns}[T]
     \begin{column}{0.48\textwidth}
       {\large \color{green!60!black}\textbf{Strengths}}
+      \vspace{0.3em}
       \begin{enumerate}
-        \item Orientation-specific gradients --- \textbf{novel}
-        \item Cubic spline angles --- \textbf{elegant}
-        \item Low-SNR performance --- \textbf{real gap}
-        \item WVF + LF complementary
-        \item Multi-scale GMM extension
+        \item Orientation-specific gradients via rotated Taylor expansion---\textbf{genuinely novel}
+        \item Cubic spline angle detection---demonstrably superior to arctan
+        \item Low-SNR aquatic performance fills a \textbf{real literature gap}
+        \item WVF (point edges) + LF (line edges) are \textbf{complementary}
+        \item Multi-scale GMM framework is a meaningful extension
       \end{enumerate}
     \end{column}
     \begin{column}{0.48\textwidth}
       {\large \color{red}\textbf{Weaknesses}}
+      \vspace{0.3em}
       \begin{enumerate}
-        \item Only 3$\times$3 baselines --- \textbf{unfair}
-        \item No runtime analysis
-        \item $n = 4$ dataset --- \textbf{no power}
-        \item 10,000$\times$ slower
-        \item ML claims unsupported
-        \item Text overlap across papers
+        \item Only compared to 3$\times$3 Sobel/Prewitt---\textbf{unfair baseline}
+        \item \textbf{No runtime analysis} in any publication
+        \item $n = 4$ aquatic dataset---\textbf{no statistical power}
+        \item WVF is \textbf{10,000$\times$ slower} than Sobel
+        \item ML ``dangerous'' claims---\textbf{unsupported}
+        \item Heavy text reuse across thesis and IEEE papers
       \end{enumerate}
     \end{column}
   \end{columns}
@@ -259,24 +299,32 @@
   \begin{columns}[T]
     \begin{column}{0.50\textwidth}
       \textbf{For the authors:}
+      \vspace{0.3em}
       \begin{enumerate}
-        \item Test Sobel at 9$\times$9, 15$\times$15
-        \item GPU implementation + timing
-        \item $\geq$50 images with independent annotators
-        \item Confidence intervals on metrics
-        \item Focus claims on angular accuracy
+        \item Compare against Sobel at matched spatial scale (9$\times$9, 15$\times$15)
+        \item Publish GPU-optimized implementation with timing benchmarks
+        \item Expand aquatic dataset to $\geq$50 images with independent annotators
+        \item Report confidence intervals and effect sizes
+        \item Narrow claims to angular accuracy---the genuine and unique contribution
       \end{enumerate}
     \end{column}
     \begin{column}{0.46\textwidth}
-      \textbf{The WVF's real niche:}\\[0.3em]
-      Larger Sobel matches ODS/OIS, but \textbf{cannot} provide:
+      \textbf{The WVF's real niche:}
+      \vspace{0.3em}
+
+      Larger Sobel kernels match ODS/OIS, but they \textbf{cannot} provide:
       \begin{itemize}
         \item Sub-degree angular precision
         \item Orientation-selective noise rejection
         \item Wave direction estimation
+        \item Edge-specific non-maximum suppression
       \end{itemize}
+
+      \vspace{0.5em}
+      These are real, valuable capabilities for littoral image processing.
+
       \vspace{0.3em}
-      \textbf{Focus the narrative here.}
+      \textbf{The narrative should focus here.}
     \end{column}
   \end{columns}
 \end{frame}
@@ -284,9 +332,12 @@
 % ====== CLOSING ======
 \begin{frame}{}
   \begin{center}
-    {\Large\bfseries Thank You}\\[1em]
-    \url{https://github.com/j-vaught/edge-detection-filter-critique}\\[1em]
-    {\small Theia HPC --- NVIDIA A100 GPUs --- University of South Carolina}
+    \vspace{1.5em}
+    {\Large\bfseries Thank You}\\[1.5em]
+    {\normalsize Code, data, and all benchmark results:}\\[0.5em]
+    \url{https://github.com/j-vaught/edge-detection-filter-critique}\\[1.5em]
+    {\small All benchmarks: Theia HPC, NVIDIA A100 GPUs\\
+    University of South Carolina}
   \end{center}
 \end{frame}
 
