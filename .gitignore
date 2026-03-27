@@ -1,0 +1,14 @@
+papers/
+results/*.png
+results/*.pdf
+results/*.npy
+__pycache__/
+*.pyc
+*.egg-info/
+.eggs/
+dist/
+build/
+*.swp
+*.swo
+.DS_Store
+slurm-*.out
