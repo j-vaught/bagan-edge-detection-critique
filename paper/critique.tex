@@ -285,6 +285,48 @@ These results have direct implications for evaluating the WVF and LF:
 \end{enumerate}
 
 %----------------------------------------------------------------------
+\section{Maritime Scene Replication}
+%----------------------------------------------------------------------
+
+To directly test the scenarios highlighted in the original publications, we generated six synthetic maritime scenes designed to replicate the specific challenges described in~\cite{bagan2024oceans,bagan2025oceans}: horizon lines with boats and buoys (cf.\ Fig.~4 in~\cite{bagan2024oceans}), a low-contrast cable floating in water (cf.\ Fig.~5, row~3), parallel wave crests at a fixed angle (cf.\ Figs.~5.7--5.9 in~\cite{bagan2023thesis}), underexposed scenes with barely visible objects (cf.\ Fig.~6 in~\cite{bagan2024oceans}), and variants with elevated noise. All scenes include pixel-level ground truth edge annotations.
+
+Table~\ref{tab:maritime} presents the best F-score (optimized over threshold) for each method on each scene.
+
+\begin{table*}[t]
+\centering
+\caption{Maritime Scene Benchmark: Best F-Score per Method (3-pixel matching radius)}
+\label{tab:maritime}
+\begin{tabular}{lccccccc}
+\toprule
+Method & Horizon & Cable & Waves & Underexposed & Dark+Noise & Low-SNR Waves & \textbf{Avg} \\
+\midrule
+Sobel 15$\times$15 & \textbf{0.189} & \textbf{0.227} & \textbf{0.488} & 0.771 & \textbf{0.081} & \textbf{0.283} & \textbf{0.340} \\
+Canny $\sigma{=}1$ & 0.058 & 0.055 & 0.327 & \textbf{0.894} & 0.058 & 0.209 & 0.267 \\
+Sobel 9$\times$9   & 0.116 & 0.172 & 0.353 & 0.380 & 0.069 & 0.233 & 0.220 \\
+Sobel 7$\times$7   & 0.087 & 0.141 & 0.283 & 0.230 & 0.066 & 0.222 & 0.172 \\
+Prewitt 3$\times$3 & 0.077 & 0.126 & 0.236 & 0.187 & 0.061 & 0.216 & 0.151 \\
+Sobel 3$\times$3   & 0.070 & 0.124 & 0.230 & 0.158 & 0.060 & 0.215 & 0.143 \\
+Sobel 5$\times$5   & 0.061 & 0.120 & 0.237 & 0.118 & 0.061 & 0.214 & 0.135 \\
+Canny $\sigma{=}2$ & 0.119 & 0.073 & 0.000 & 0.000 & 0.074 & 0.210 & 0.079 \\
+\bottomrule
+\end{tabular}
+\end{table*}
+
+Several findings are consistent with the claims in the original publications. Traditional 3$\times$3 operators indeed perform poorly on these challenging maritime scenes, particularly the \textbf{Dark Horizon} scenario (F $\approx$ 0.06 for all methods), which replicates the low-SNR, low-contrast conditions where the WVF is claimed to excel. The \textbf{Cable in Water} scene (F $\leq$ 0.23 for all methods) confirms that detecting low-contrast linear features in textured water backgrounds is genuinely difficult.
+
+However, three observations qualify the WVF's claimed advantage:
+
+\begin{enumerate}
+\item \textbf{Larger kernels close most of the gap.} Sobel 15$\times$15 achieves the highest average F-score (0.340) across all maritime scenes, outperforming Sobel 3$\times$3 (0.143) by a factor of $2.4\times$. This improvement comes from the same mechanism as the WVF: incorporating more pixel information to suppress noise.
+
+\item \textbf{The hardest scenes remain hard for everyone.} On the Dark Horizon scene (F $\leq$ 0.08), no traditional method produces usable edges. This is precisely the regime where the WVF's orientation-specific computation \textit{could} provide genuine benefit---by detecting edges that align with a specific gradient direction while rejecting noise in all other directions. Our synthetic tests cannot evaluate this because we did not re-implement the full $N_p = 250$ WVF due to computational constraints.
+
+\item \textbf{Wave fields favor angle-aware methods.} The Wave Field scene has parallel crests at a known angle. Sobel 15$\times$15 achieves F = 0.488, but a method that explicitly computes gradients along the wave-normal direction (as the LF does) should theoretically achieve higher scores by rejecting the perpendicular noise component.
+\end{enumerate}
+
+These results partially validate the WVF/LF's motivation while confirming that the original papers' comparison against only 3$\times$3 operators overstates the practical advantage.
+
+%----------------------------------------------------------------------
 \section{Claims vs.\ Evidence}
 %----------------------------------------------------------------------
 
