@@ -105,6 +105,47 @@
   \end{columns}
 \end{frame}
 
+\begin{frame}{What We Did}
+  \begin{columns}[T]
+    \begin{column}{0.48\textwidth}
+      \textbf{Re-implementation (Python/NumPy):}
+      \begin{itemize}
+        \item Wide View Filter (Eq.~1--3)
+        \item Line Filter (Eq.~4--6)
+        \item Cubic spline angle detection
+        \item Condition number analysis
+      \end{itemize}
+      \vspace{0.5em}
+      \textbf{Traditional baselines:}
+      \begin{itemize}
+        \item Sobel at 3$\times$3, 5$\times$5, 7$\times$7, 9$\times$9, 15$\times$15
+        \item Prewitt 3$\times$3
+        \item Canny ($\sigma$=1, $\sigma$=2)
+        \item Laplacian of Gaussian ($\sigma$=2)
+      \end{itemize}
+    \end{column}
+    \begin{column}{0.48\textwidth}
+      \textbf{ML models (pretrained):}
+      \begin{itemize}
+        \item DexiNed --- 135M params, BIPED-trained
+        \item TEED --- 58K params, BIPED-trained
+        \item PiDiNet --- 2.8M params
+      \end{itemize}
+      \vspace{0.5em}
+      \textbf{Datasets:}
+      \begin{itemize}
+        \item BSDS500 (200 test images)
+        \item UDED (edge detection benchmark)
+        \item 6 synthetic maritime scenes
+      \end{itemize}
+      \vspace{0.5em}
+      \textbf{Infrastructure:}\\
+      Theia HPC --- NVIDIA A100-SXM4-40GB\\
+      SLURM batch jobs --- CUDA 12.1
+    \end{column}
+  \end{columns}
+\end{frame}
+
 % ============================================================
 \sectionsubtitle{}
 \section{Math Verification}
@@ -139,6 +180,38 @@
   \end{center}
   \vspace{-0.3em}
   50 test images on A100 GPU. \textbf{Sobel 15$\times$15 (ODS=0.549) outperforms DexiNed (0.495) and TEED (0.470)} while being 30$\times$ faster. WVF at $N_p=15$ on 64$\times$64 crops: ODS=0.000 at 9 seconds/image.
+\end{frame}
+
+\begin{frame}{BSDS500 Full Results}
+  \vspace{-0.2em}
+  \begin{center}
+  {\small
+  \begin{tabular}{llcccr}
+    \toprule
+    \textbf{Rank} & \textbf{Method} & \textbf{Type} & \textbf{ODS} & \textbf{OIS} & \textbf{ms/img} \\
+    \midrule
+    1 & Sobel 15$\times$15 & Traditional & \textbf{0.549} & \textbf{0.554} & 12 \\
+    2 & Sobel 9$\times$9   & Traditional & 0.516 & 0.524 & 9 \\
+    3 & DexiNed            & ML          & 0.495 & 0.504 & 341 \\
+    4 & Sobel 7$\times$7   & Traditional & 0.493 & 0.499 & 8 \\
+    5 & TEED               & ML          & 0.470 & 0.471 & 74 \\
+    6 & Sobel 5$\times$5   & Traditional & 0.464 & 0.467 & 14 \\
+    7 & Prewitt 3$\times$3 & Traditional & 0.453 & 0.460 & 11 \\
+    8 & Sobel 3$\times$3   & Traditional & 0.449 & 0.458 & 14 \\
+    9 & LoG $\sigma$=2     & Traditional & 0.382 & 0.385 & 225 \\
+    10 & Canny $\sigma$=2  & Traditional & 0.303 & 0.290 & 21 \\
+    11 & WVF $N_p$=15      & WVF         & 0.000 & 0.000 & 9{,}057 \\
+    \bottomrule
+  \end{tabular}
+  }
+  \end{center}
+  \vspace{0.3em}
+  Key observations:
+  \begin{itemize}
+    \item Sobel ODS improves from 0.449 (3$\times$3) to 0.549 (15$\times$15)---a \textbf{22\% gain} just from kernel size
+    \item DexiNed (0.495) is beaten by Sobel 9$\times$9 (0.516) despite being 38$\times$ slower
+    \item WVF at $N_p$=15 on 64$\times$64: zero output at \textbf{9 seconds/image}
+  \end{itemize}
 \end{frame}
 
 \begin{frame}{Kernel Size Scaling}
@@ -327,6 +400,20 @@
       \textbf{The narrative should focus here.}
     \end{column}
   \end{columns}
+\end{frame}
+
+\begin{frame}{Key Takeaways}
+  \begin{enumerate}
+    \item \textbf{The math is correct.} Taylor expansion + least-squares recovers derivatives to machine precision. The formulation is sound.
+    \vspace{0.4em}
+    \item \textbf{The comparison is unfair.} WVF ($N_p$=250) vs Sobel 3$\times$3 is a 28$\times$ data advantage. Sobel at matched scale (15$\times$15) achieves higher ODS on both BSDS500 and competitive ODS on UDED.
+    \vspace{0.4em}
+    \item \textbf{Runtime is prohibitive.} WVF is 10,000$\times$ slower than Sobel---no timing data in any publication. Impractical for the autonomous vehicle application the authors target.
+    \vspace{0.4em}
+    \item \textbf{Statistical claims lack power.} 4-image dataset with no confidence intervals. ODS/OIS differences of 2--5\% are within noise.
+    \vspace{0.4em}
+    \item \textbf{Angular accuracy is the real contribution.} Sobel arctan has 1--53\textdegree{} errors. The WVF's orientation-specific approach with cubic spline fitting achieves $<$1\textdegree{}. This is novel, valid, and not replicable by larger Sobel kernels.
+  \end{enumerate}
 \end{frame}
 
 % ====== CLOSING ======
