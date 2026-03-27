@@ -1,0 +1,238 @@
+% ============================================================
+% University of South Carolina — LaTeX Beamer Template (16:9)
+% ============================================================
+% Compile with XeLaTeX:  xelatex main.tex && xelatex main.tex
+% ============================================================
+
+\documentclass[10pt, aspectratio=169]{beamer}
+
+\usetheme{uofsc}
+\usepackage{booktabs}
+\usepackage{amsmath,amssymb}
+\usepackage{hyperref}
+
+% --- Presentation Metadata ---
+\title[Short Title]{Your Presentation Title}
+\subtitle{Subtitle or Occasion}
+\author[Author]{Your Name\texorpdfstring{\\}{, }Line 2: Department or Affiliation\texorpdfstring{\\}{, }Line 3: Additional Info or Date}
+\institute[UofSC]{}  % not shown on title slide; kept for footline short form
+\date{}              % not shown on title slide
+
+% \titlegraphic{\includegraphics[height=1.2cm]{uofsc-logo-white.png}}
+
+% ============================================================
+\begin{document}
+
+% ------ Title Slide ------
+{
+  \setbeamertemplate{footline}{}
+  \begin{frame}[plain]
+    \titlepage
+  \end{frame}
+}
+
+% ------ Outline ------
+\begin{frame}{Outline}
+  \tableofcontents
+\end{frame}
+
+% ============================================================
+% SECTION WITH SUBTITLE (centered, auto-generated)
+% Set \sectionsubtitle{} BEFORE the \section command.
+% ============================================================
+\sectionsubtitle{Setting the stage for the research problem}
+\section{Introduction}
+
+\begin{frame}{Motivation}
+  This body text is in Arimo (the Arial equivalent).
+
+  \begin{itemize}
+    \item First key point about your topic
+    \item Second key point with supporting detail
+    \item Third key point to frame the problem
+  \end{itemize}
+
+  \vspace{0.5em}
+  Numbered lists now have plain numbers (no box):
+  \begin{enumerate}
+    \item Step one of the process
+    \item Step two of the process
+    \item Step three of the process
+  \end{enumerate}
+\end{frame}
+
+% ============================================================
+\sectionsubtitle{A brief review of the relevant literature}
+\section{Background}
+
+\begin{frame}{Literature Review}
+  \begin{columns}[T]
+    \begin{column}{0.48\textwidth}
+      \textbf{Prior Work}
+      \begin{itemize}
+        \item Author A et al.\ (2023) studied \ldots
+        \item Author B et al.\ (2024) proposed \ldots
+      \end{itemize}
+    \end{column}
+    \begin{column}{0.48\textwidth}
+      \textbf{Our Contribution}
+      \begin{itemize}
+        \item We extend the framework by \ldots
+        \item Novel approach to \ldots
+      \end{itemize}
+    \end{column}
+  \end{columns}
+
+  \vspace{1em}
+  \formal{This sentence is set in Tinos (the Georgia equivalent),
+  which you can use for formal text via the
+  \texttt{\textbackslash formal\{\}} command.}
+\end{frame}
+
+% ============================================================
+\sectionsubtitle{How we approached the problem}
+\section{Methods}
+
+\begin{frame}{Methodology}
+  \begin{block}{Approach}
+    Describe your overall methodology or experimental design here.
+  \end{block}
+
+  \begin{alertblock}{Important Consideration}
+    Highlight a key constraint or assumption.
+  \end{alertblock}
+
+  \begin{exampleblock}{Example}
+    Provide a concrete example of the method in action.
+  \end{exampleblock}
+\end{frame}
+
+% ============================================================
+\sectionsubtitle{Key findings and analysis}
+\section{Results}
+
+% ------ 2-Column: text left, image right ------
+\begin{frame}{Two Columns --- Image Right}
+  \begin{columns}[T]
+    \begin{column}{0.48\textwidth}
+      Key findings from the experiment:
+      \begin{enumerate}
+        \item Accuracy improved by 13.4\%
+        \item Runtime decreased by 35\%
+        \item Scales linearly with input size
+      \end{enumerate}
+
+      \vspace{0.5em}
+      These results hold across all tested configurations.
+    \end{column}
+    \begin{column}{0.48\textwidth}
+      \includegraphics[width=\textwidth]{placeholder.png}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+% ------ 3-Column: text | image | text ------
+\begin{frame}{Three Columns --- Image in Middle}
+  \begin{columns}[T]
+    \begin{column}{0.28\textwidth}
+      \textbf{Input}
+      \begin{itemize}
+        \item Raw sensor data
+        \item 10k samples/sec
+        \item 3 channels
+      \end{itemize}
+    \end{column}
+    \begin{column}{0.38\textwidth}
+      \centering
+      \includegraphics[width=\textwidth]{placeholder.png}
+    \end{column}
+    \begin{column}{0.28\textwidth}
+      \textbf{Output}
+      \begin{itemize}
+        \item Classified events
+        \item 98.2\% precision
+        \item Real-time capable
+      \end{itemize}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+% ------ 2-Column: 1/3 text, 2/3 image ------
+\begin{frame}{Wide Image --- 1/3 Text, 2/3 Image}
+  \begin{columns}[T]
+    \begin{column}{0.30\textwidth}
+      \textbf{Observations}
+
+      \vspace{0.3em}
+      The heatmap reveals a strong spatial correlation in the
+      eastern region, consistent with the hypothesis.
+
+      \vspace{0.5em}
+      \begin{enumerate}
+        \item Cluster A: high activity
+        \item Cluster B: moderate
+        \item Cluster C: baseline
+      \end{enumerate}
+    \end{column}
+    \begin{column}{0.65\textwidth}
+      \includegraphics[width=\textwidth]{placeholder.png}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+% ------ Results table ------
+\begin{frame}{Results Table}
+  \begin{table}
+    \centering
+    \caption{Summary of experimental results.}
+    \begin{tabular}{lcc}
+      \toprule
+      \textbf{Method} & \textbf{Accuracy (\%)} & \textbf{Runtime (s)} \\
+      \midrule
+      Baseline         & 78.3 & 12.4 \\
+      Proposed (Ours)  & \textbf{91.7} & \textbf{8.1} \\
+      \bottomrule
+    \end{tabular}
+  \end{table}
+\end{frame}
+
+% ============================================================
+\sectionsubtitle{}
+\section{Conclusion}
+
+\begin{frame}{Summary and Future Work}
+  \textbf{Summary}
+  \begin{itemize}
+    \item We presented a novel approach to \ldots
+    \item Key finding: \ldots
+    \item Results demonstrate significant improvement.
+  \end{itemize}
+
+  \vspace{0.5em}
+  \textbf{Future Directions}
+  \begin{enumerate}
+    \item Extend the framework to handle \ldots
+    \item Conduct a larger-scale evaluation \ldots
+    \item Explore connections to \ldots
+  \end{enumerate}
+\end{frame}
+
+% ------ Thank You / Q&A ------
+{
+  \setbeamertemplate{footline}{}
+  \begin{frame}[plain]
+    \begin{tikzpicture}[remember picture, overlay]
+      \fill[UofSCGarnet] (current page.south west) rectangle (current page.north east);
+      \fill[UofSCDarkGarnet] (current page.south west) rectangle ([yshift=0.8cm]current page.south east);
+      \draw[white, line width=0.5pt] ([yshift=0.8cm]current page.south west) -- ([yshift=0.8cm]current page.south east);
+    \end{tikzpicture}
+    \vfill
+    \centering
+    {\fontsize{50}{55}\selectfont\impactfont\color{UofSCWhite} THANK YOU!}\\[1em]
+    {\Large\color{UofSCWhite} Questions \& Discussion}\\[0.5em]
+    {\normalsize\color{UofSCGray30} your.email@sc.edu}
+    \vfill
+  \end{frame}
+}
+
+\end{document}
