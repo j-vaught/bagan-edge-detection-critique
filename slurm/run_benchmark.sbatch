@@ -13,7 +13,19 @@
 module load python3/anaconda/3.12
 module load cuda/12.1
 
-pip install --user 'numpy==2.0.2' opencv-python-headless kornia 'scikit-image>=0.22' 2>&1 | tail -3
+# Disable user site-packages to avoid numpy version conflicts with system libs
+export PYTHONNOUSERSITE=1
+
+# Use isolated package dir for kornia/opencv (no-deps to avoid torch conflict)
+if [ ! -d "$HOME/.bench_pkgs/kornia" ]; then
+    pip install --target=$HOME/.bench_pkgs --no-deps kornia kornia_rs opencv-python-headless 2>&1 | tail -3
+fi
+export PYTHONPATH=$HOME/.bench_pkgs:$PYTHONPATH
+
+echo "Python: $(which python) $(python --version)"
+python -c "import numpy; print('NumPy:', numpy.__version__)"
+python -c "import torch; print('PyTorch:', torch.__version__, 'CUDA:', torch.cuda.is_available())"
+python -c "import matplotlib; print('Matplotlib:', matplotlib.__version__)"
 
 cd $HOME/edge-detection-filter-critique
 
