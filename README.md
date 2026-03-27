@@ -1,5 +1,5 @@
 ```
-bagan-edge-detection-critique/
+edge-detection-filter-critique/
 ├── README.md
 ├── LICENSE
 ├── .gitignore
