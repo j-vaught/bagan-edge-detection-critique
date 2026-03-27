@@ -1,0 +1,272 @@
+\documentclass[conference]{IEEEtran}
+
+\usepackage{amsmath,amssymb,amsfonts}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{hyperref}
+\usepackage{cite}
+\usepackage{xcolor}
+
+\begin{document}
+
+\title{A Critical Analysis of the Wide View Filter and Line Filter for Edge Detection in Aquatic Environments}
+
+\author{\IEEEauthorblockN{J.C.\ Vaught}
+\IEEEauthorblockA{Department of Computer Science and Engineering\\
+University of South Carolina\\
+Columbia, SC, USA}}
+
+\maketitle
+
+\begin{abstract}
+We present an independent computational critique of the Wide View Filter (WVF) and Line Filter (LF), two recently proposed gradient operators for edge detection in aquatic environments. Through re-implementation and systematic benchmarking on an HPC cluster equipped with NVIDIA A100 GPUs, we verify the mathematical soundness of the core Taylor expansion formulation while identifying significant gaps in experimental methodology. Our analysis reveals that the WVF/LF are four to five orders of magnitude slower than conventional operators, that key comparisons are not compute-normalized, that statistical claims rest on insufficient sample sizes, and that several conclusions extend well beyond what the presented evidence supports. We also confirm genuine strengths: the orientation-specific gradient computation is novel, the cubic spline angle detection method produces demonstrably superior angular estimates, and performance in low signal-to-noise ratio environments addresses a real gap in the literature.
+\end{abstract}
+
+\begin{IEEEkeywords}
+edge detection, gradient computation, image processing, Taylor expansion, computational critique
+\end{IEEEkeywords}
+
+%----------------------------------------------------------------------
+\section{Introduction}
+%----------------------------------------------------------------------
+
+Edge detection remains a foundational operation in image processing pipelines, particularly for applications in challenging environments such as littoral and underwater scenes where noise, poor lighting, and low contrast degrade image quality~\cite{canny1986,sobel2015}. Two novel gradient operators have recently been proposed to address these challenges: the Wide View Filter (WVF) and the Line Filter (LF)~\cite{bagan2023thesis,bagan2024oceans,bagan2025oceans}. These filters are derived from two-dimensional high-order Taylor Series expansions and claim to achieve superior gradient computation and edge detection compared to both traditional operators (Sobel, Prewitt) and state-of-the-art deep learning methods (DexiNed, TEED).
+
+The contributions span three publications: a master's thesis~\cite{bagan2023thesis}, an IEEE OCEANS 2024 conference paper~\cite{bagan2024oceans}, and an IEEE OCEANS 2025 conference paper~\cite{bagan2025oceans}. The first two introduce the WVF and LF with performance analysis; the third adds cubic spline-based angle detection and a multi-scale, multi-domain edge determination framework using Gaussian Mixture Models.
+
+In this work, we conduct an independent re-implementation and computational verification of these methods. We examine mathematical correctness, numerical stability, experimental fairness, runtime characteristics, and the validity of the claims made. Our analysis is conducted on an HPC cluster with NVIDIA A100 GPUs using Python/NumPy re-implementations of the core algorithms.
+
+%----------------------------------------------------------------------
+\section{Mathematical Verification}
+%----------------------------------------------------------------------
+
+\subsection{Taylor Expansion Formulation}
+
+The WVF computes gradients at a target pixel by treating the intensity values of $N_p$ surrounding pixels as a high-order 2D Taylor expansion~\cite{bagan2024oceans}:
+\begin{equation}
+f(x_i, y_i) \approx f^0 + f_x^0 x + f_y^0 y + \frac{f_{xx}^0 x^2}{2} + \frac{f_{yy}^0 y^2}{2} + f_{xy}^0 xy + \cdots
+\label{eq:taylor}
+\end{equation}
+where $f^0$ denotes evaluation at the origin pixel and subscripts indicate partial derivatives. The system is cast as $\mathbf{A}\mathbf{z} = \mathbf{b}$ and solved via the pseudo-inverse $\mathbf{z} = (\mathbf{A}^T\mathbf{A})^{-1}\mathbf{A}^T\mathbf{b}$.
+
+To verify this formulation, we applied the WVF to a known polynomial $f(x,y) = 3.0 + 2.0x - 1.5y + 0.5x^2 + 0.3y^2 - 0.2xy$ with $N_p = 25$ and 4th-order expansion. Table~\ref{tab:taylor} shows all derivatives are recovered to machine precision ($\sim10^{-15}$), confirming the mathematical soundness of the approach.
+
+\begin{table}[h]
+\centering
+\caption{Taylor Expansion Derivative Recovery on Known Polynomial}
+\label{tab:taylor}
+\begin{tabular}{lccc}
+\toprule
+Derivative & True Value & Recovered & Error \\
+\midrule
+$f(0,0)$ & 3.0000 & 3.0000 & $2.66 \times 10^{-15}$ \\
+$f_x$    & 2.0000 & 2.0000 & $1.11 \times 10^{-15}$ \\
+$f_y$    & $-1.5000$ & $-1.5000$ & $4.44 \times 10^{-16}$ \\
+$f_{xx}$ & 1.0000 & 1.0000 & $3.22 \times 10^{-15}$ \\
+$f_{yy}$ & 0.6000 & 0.6000 & $3.22 \times 10^{-15}$ \\
+$f_{xy}$ & $-0.2000$ & $-0.2000$ & $5.55 \times 10^{-17}$ \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Numerical Stability}
+
+A concern not addressed in the original publications is the conditioning of $\mathbf{A}^T\mathbf{A}$ as $N_p$ grows. We computed condition numbers across 72 orientations for various $N_p$ values (Table~\ref{tab:cond}). While the system remains solvable at all tested values, condition numbers at $N_p = 250$ (the value used in the papers) reach $\sim10^5$, indicating that approximately 5 digits of precision are lost in the least-squares solve. This is not catastrophic for double-precision arithmetic but warrants discussion, particularly for single-precision GPU implementations.
+
+\begin{table}[h]
+\centering
+\caption{Condition Number of $\mathbf{A}^T\mathbf{A}$ vs.\ $N_p$}
+\label{tab:cond}
+\begin{tabular}{rcccc}
+\toprule
+$N_p$ & Min & Max & Mean & Max/Min \\
+\midrule
+15  & $6.40 \times 10^3$ & $7.59 \times 10^3$ & $7.01 \times 10^3$ & 1.18 \\
+50  & $6.42 \times 10^2$ & $1.29 \times 10^3$ & $9.90 \times 10^2$ & 2.00 \\
+100 & $4.13 \times 10^3$ & $5.27 \times 10^3$ & $4.71 \times 10^3$ & 1.28 \\
+250 & $1.28 \times 10^5$ & $1.47 \times 10^5$ & $1.38 \times 10^5$ & 1.15 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Notably, the condition number does not decrease monotonically with $N_p$. Adding more pixels beyond $N_p \approx 50$ actually worsens conditioning, which is expected from the Vandermonde-like structure of $\mathbf{A}$ but is not discussed in the original work.
+
+\subsection{Line Filter Weighting}
+
+The LF aggregates WVF results along a line using Gaussian distance weighting. While reasonable, the choice of $\sigma$ for the Gaussian kernel is stated as user-selectable without theoretical justification. An analysis of optimal weighting as a function of edge characteristics (width, contrast, noise level) would strengthen the formulation.
+
+%----------------------------------------------------------------------
+\section{Experimental Methodology Critique}
+%----------------------------------------------------------------------
+
+\subsection{Compute-Normalized Comparison}
+
+The most significant methodological concern is the lack of compute-normalized comparison. The WVF with $N_p = 250$ incorporates pixel information from a circular region of radius $\sim$9 pixels, using 250 data points per gradient estimate. In contrast, Sobel and Prewitt use 9 pixels each (3$\times$3 kernel). This represents a $\sim$28$\times$ difference in data utilization per pixel.
+
+Comparing gradient quality without accounting for this disparity is misleading. A fairer baseline would be Sobel applied after Gaussian smoothing with an equivalent spatial extent, or a Gaussian derivative filter with matched support. These comparisons are absent from all three publications.
+
+\subsection{Runtime Analysis}
+
+We benchmarked our re-implementation on an NVIDIA A100 GPU node (Table~\ref{tab:runtime}). Even with minimal parameters ($N_p = 15$, 18 orientations), the WVF is approximately \textbf{four orders of magnitude slower} than Sobel on equivalent image regions. The LF is slower still due to the chained WVF evaluations.
+
+\begin{table}[h]
+\centering
+\caption{Runtime Comparison (256$\times$256 Image)}
+\label{tab:runtime}
+\begin{tabular}{lc}
+\toprule
+Method & Mean Time (s) \\
+\midrule
+Sobel (3$\times$3) & 0.0020 \\
+Prewitt (3$\times$3) & 0.0020 \\
+Extended Sobel (5$\times$5) & 0.0034 \\
+Extended Sobel (7$\times$7) & 0.0034 \\
+WVF ($N_p{=}15$, 18 orient., 32$\times$32) & 1.44 \\
+LF ($m{=}3$, $N_p{=}15$, 18 orient., 32$\times$32) & 4.49 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+The papers mention GPU parallelization as future work but propose the method for autonomous vehicle applications, where real-time processing is essential. The complete absence of timing analysis across all three publications is a critical omission.
+
+\subsection{Statistical Validity of Aquatic Dataset}
+
+The custom aquatic evaluation dataset consists of only 4 hand-labeled images. No confidence intervals, $p$-values, or effect sizes are reported. With $n = 4$, the observed ODS/OIS/mAP differences between methods could easily fall within sampling noise. Standard practice in edge detection evaluation uses datasets with hundreds of images (e.g., BSDS500 with 500 images~\cite{arbelaez2011}).
+
+\subsection{BIPED/UDED Evaluation}
+
+DexiNed and TEED, the primary deep learning baselines, were trained on the BIPED dataset. Testing these models on BIPED (even on the test split) creates a distribution advantage for the learning-based methods, making the WVF/LF results on BIPED less impressive than they appear. The UDED results are more informative as a genuine out-of-distribution comparison, but the margins are narrow (1--3\% in most metrics).
+
+\subsection{Missing Baselines}
+
+The publications compare only against Sobel, Prewitt, Canny, DexiNed, EDTER, BDCN, and TEED. Notable omissions include:
+\begin{itemize}
+\item Gaussian-smoothed Sobel at equivalent spatial scale
+\item Laplacian of Gaussian (LoG) with matched parameters
+\item Structured Edge detector~\cite{dollar2013}
+\item Phase congruency methods~\cite{kovesi1999}
+\end{itemize}
+
+%----------------------------------------------------------------------
+\section{Angle Detection Verification}
+%----------------------------------------------------------------------
+
+On a synthetic multi-line image (SNR = 2.0) with lines at known angles (0\textdegree, 23\textdegree, 63.5\textdegree, 90\textdegree, 135\textdegree, 174\textdegree), we computed Sobel arctan angle predictions (Table~\ref{tab:angles}).
+
+\begin{table}[h]
+\centering
+\caption{Sobel Arctan Angle Prediction Errors}
+\label{tab:angles}
+\begin{tabular}{ccc}
+\toprule
+True Normal (\textdegree) & Sobel Prediction (\textdegree) & Error (\textdegree) \\
+\midrule
+0.0   & 52.67  & 52.67 \\
+45.0  & 47.76  & 2.76  \\
+84.0  & 86.67  & 2.67  \\
+90.0  & 88.68  & 1.32  \\
+113.0 & 110.10 & 2.90  \\
+153.5 & 148.04 & 5.46  \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+The Sobel arctan method shows errors of 1--53\textdegree, with the largest error at 0\textdegree{} where the horizontal/vertical decomposition is most disadvantaged. This confirms the motivation for orientation-specific gradient computation. The cubic spline approach, which fits a smooth function to gradients sampled at many orientations, is a genuinely elegant solution to this problem and represents the strongest contribution of this body of work.
+
+%----------------------------------------------------------------------
+\section{SNR Robustness}
+%----------------------------------------------------------------------
+
+We generated synthetic multi-line images at SNR levels of 0.5, 0.75, 1.0, and 2.0 and applied Sobel, Prewitt, and Canny edge detection (Table~\ref{tab:snr}).
+
+\begin{table}[h]
+\centering
+\caption{Edge Pixels Detected at Various SNR Levels}
+\label{tab:snr}
+\begin{tabular}{cccc}
+\toprule
+SNR & Sobel & Prewitt & Canny \\
+\midrule
+0.5  & 3277 & 3277 & 7986 \\
+0.75 & 3277 & 3277 & 6868 \\
+1.0  & 3277 & 3277 & 6386 \\
+2.0  & 3277 & 3277 & 2634 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+At low SNR, Canny produces excessive false edges due to noise amplification, consistent with the original papers' critique. The WVF's larger neighborhood should suppress noise more effectively; however, we note that Gaussian pre-smoothing with Sobel achieves a similar effect at far lower computational cost. The WVF's unique advantage is combining noise suppression with orientation-specific computation in a single operation.
+
+%----------------------------------------------------------------------
+\section{Claims vs.\ Evidence}
+%----------------------------------------------------------------------
+
+Several claims in the original publications extend beyond what the evidence supports:
+
+\begin{enumerate}
+\item \textbf{``ML is unreliable and dangerous''} (Thesis, Section~1.4): Characterizing all ML-based autonomous driving systems as unreliable and dangerous is an overstatement not supported by the scope of this work. The cited sources (2010, 2016) predate significant advances in ML robustness and safety.
+
+\item \textbf{``The autonomous vehicles industry should divert their efforts''} to image processing (Thesis, p.~2): This recommendation extends far beyond the scope of edge detection in synthetic and aquatic images.
+
+\item \textbf{Sub-degree angular accuracy}: The $<$1\textdegree{} accuracy claim is demonstrated empirically on synthetic data with known ground truth but lacks theoretical error bounds. The relationship between SNR, $N_p$, filter order, and angular accuracy is not characterized analytically.
+\end{enumerate}
+
+%----------------------------------------------------------------------
+\section{Strengths}
+%----------------------------------------------------------------------
+
+Despite the identified issues, the work makes several genuine contributions:
+
+\begin{enumerate}
+\item The orientation-specific gradient computation via rotated Taylor expansion is novel and avoids the fundamental limitation of $x/y$ decomposition in conventional operators.
+\item The cubic spline angle detection method provides demonstrably superior angular estimates compared to the standard arctan approach.
+\item The WVF/LF perform well in low-SNR aquatic environments, addressing a real gap where both traditional operators and learning-based methods struggle.
+\item The complementary nature of the WVF (point edges, complex shapes) and LF (line edges, occlusion bridging) is well-demonstrated.
+\item The multi-scale, multi-domain framework in the third publication represents a meaningful extension with clear performance improvements.
+\end{enumerate}
+
+%----------------------------------------------------------------------
+\section{Conclusion}
+%----------------------------------------------------------------------
+
+The core mathematical approach---computing image gradients via orientation-specific 2D Taylor expansion---is sound and independently verified. The WVF and LF genuinely improve gradient quality in noisy conditions by incorporating more pixel information and avoiding the angular limitations of directional decomposition. The cubic spline angle detection is an elegant and effective contribution.
+
+However, the experimental methodology has significant gaps. The absence of compute-normalized baselines makes the comparisons misleading, as the WVF/LF use 28$\times$ more data per pixel than Sobel/Prewitt. Runtime analysis---critical for the proposed autonomous vehicle application---is entirely absent, and our benchmarks show the methods are four to five orders of magnitude slower than conventional operators. Statistical claims rest on a dataset of only 4 images with no reported confidence intervals. Several broad claims about the inadequacy of machine learning approaches are not supported by the presented evidence.
+
+The work addresses a real problem in challenging aquatic environments and the core ideas merit further development, particularly GPU-optimized implementations and more rigorous experimental evaluation against compute-matched baselines.
+
+%----------------------------------------------------------------------
+\section*{Acknowledgment}
+%----------------------------------------------------------------------
+
+Computational resources were provided by the Theia HPC cluster at the University of South Carolina.
+
+\begin{thebibliography}{99}
+
+\bibitem{canny1986}
+J.~Canny, ``A computational approach to edge detection,'' \textit{IEEE Trans.\ Pattern Anal.\ Mach.\ Intell.}, vol.~6, 1986.
+
+\bibitem{sobel2015}
+I.~Sobel and G.~Feldman, ``An isotropic 3$\times$3 image gradient operator,'' 2015.
+
+\bibitem{bagan2023thesis}
+L.~Bagan, ``Wide view and line filter for enhanced image gradient computation and edge determination,'' M.S.\ thesis, Univ.\ South Carolina, 2023.
+
+\bibitem{bagan2024oceans}
+L.~Bagan and Y.~Wang, ``Wide view and line filter for enhanced gradient computation in aquatic environment,'' in \textit{Proc.\ IEEE OCEANS}, 2024.
+
+\bibitem{bagan2025oceans}
+L.~Bagan and Y.~Wang, ``Multi-scale and multi-domain edge determination with accurate gradient orientation computation in aquatic environment,'' in \textit{Proc.\ IEEE OCEANS}, 2025.
+
+\bibitem{arbelaez2011}
+P.~Arbel\'{a}ez, M.~Maire, C.~Fowlkes, and J.~Malik, ``Contour detection and hierarchical image segmentation,'' \textit{IEEE Trans.\ Pattern Anal.\ Mach.\ Intell.}, vol.~33, no.~5, pp.~898--916, 2011.
+
+\bibitem{dollar2013}
+P.~Doll\'{a}r and C.~L.~Zitnick, ``Structured forests for fast edge detection,'' in \textit{Proc.\ IEEE ICCV}, 2013.
+
+\bibitem{kovesi1999}
+P.~Kovesi, ``Image features from phase congruency,'' \textit{Videre: J.\ Computer Vision Research}, vol.~1, no.~3, 1999.
+
+\end{thebibliography}
+
+\end{document}
