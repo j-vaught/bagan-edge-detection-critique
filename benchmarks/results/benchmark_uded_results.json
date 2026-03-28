@@ -1,0 +1,121 @@
+{
+  "meta": {
+    "dataset": "UDED",
+    "images_available": 30,
+    "images_used": 30,
+    "n_thresholds": 100,
+    "match_radius": 3,
+    "runtime": {
+      "hostname": "node031",
+      "python_version": "3.12.4",
+      "platform": "Linux-5.14.0-362.8.1.el9_3.x86_64-x86_64-with-glibc2.34",
+      "numpy_version": "1.26.4",
+      "torch_version": "2.3.1+cu121",
+      "cuda_available": false,
+      "cuda_device_count": 0,
+      "benchmark_note": "Traditional filters and WVF/LF run in NumPy/SciPy on CPU. ML models use PyTorch and only run on GPU when torch.cuda.is_available() is true.",
+      "cuda_devices": []
+    }
+  },
+  "results": {
+    "Sobel-3x3": {
+      "ODS": 0.8827869298454996,
+      "OIS": 0.8946851869678626,
+      "AP": 0.929629260162959,
+      "avg_time_s": 0.014158380807687838,
+      "type": "traditional"
+    },
+    "Sobel-5x5": {
+      "ODS": 0.8875810259165783,
+      "OIS": 0.8983846616121315,
+      "AP": 0.935016773597184,
+      "avg_time_s": 0.0181351648333172,
+      "type": "traditional"
+    },
+    "Sobel-7x7": {
+      "ODS": 0.9002634451267446,
+      "OIS": 0.910532300727287,
+      "AP": 0.9488115235167776,
+      "avg_time_s": 0.01611143316452702,
+      "type": "traditional"
+    },
+    "Sobel-9x9": {
+      "ODS": 0.9037850905223197,
+      "OIS": 0.914783981242597,
+      "AP": 0.9541412565668029,
+      "avg_time_s": 0.014966075588017703,
+      "type": "traditional"
+    },
+    "Sobel-15x15": {
+      "ODS": 0.8769688338576677,
+      "OIS": 0.893660924088492,
+      "AP": 0.9423409018005219,
+      "avg_time_s": 0.019025690108537673,
+      "type": "traditional"
+    },
+    "Prewitt-3x3": {
+      "ODS": 0.8846800378163887,
+      "OIS": 0.8967882848797805,
+      "AP": 0.9311178482663254,
+      "avg_time_s": 0.01941896586989363,
+      "type": "traditional"
+    },
+    "Canny-sigma1": {
+      "ODS": 0.821112136465899,
+      "OIS": 0.8034026278841604,
+      "AP": 0.3428027853931731,
+      "avg_time_s": 0.031984419313569865,
+      "type": "traditional"
+    },
+    "Canny-sigma2": {
+      "ODS": 0.8046588687516554,
+      "OIS": 0.792654609507791,
+      "AP": 0.32519033918762186,
+      "avg_time_s": 0.022628160193562508,
+      "type": "traditional"
+    },
+    "LoG-sigma2": {
+      "ODS": 0.858530335776757,
+      "OIS": 0.8682007630956595,
+      "AP": 0.9070401392035607,
+      "avg_time_s": 0.3568786934328576,
+      "type": "traditional"
+    },
+    "WVF-Np15": {
+      "ODS": 0.0579847932035276,
+      "OIS": 0.09788160420571487,
+      "AP": 0.007051079273081778,
+      "avg_time_s": 7.323838031664491,
+      "type": "wvf_lf",
+      "note": "UDED subset, Np=15, 18 orientations, resized to 64x64",
+      "n_images": 5
+    },
+    "LF-m3-Np15": {
+      "ODS": 0.05263157894736842,
+      "OIS": 0.052631578947368425,
+      "AP": 0.00303030303030303,
+      "avg_time_s": 26.98441292345524,
+      "type": "wvf_lf",
+      "note": "UDED subset, m=3, Np=15, 18 orientations, subsample=2, resized to 64x64",
+      "n_images": 3
+    },
+    "TEED": {
+      "ODS": 0.8814435549438506,
+      "OIS": 0.8897660816478178,
+      "AP": 0.8501017550665715,
+      "avg_time_s": 0.2911099570492903,
+      "type": "ml",
+      "n_images": 30,
+      "note": "PyTorch inference on cpu"
+    },
+    "DexiNed": {
+      "ODS": 0.9010009712040216,
+      "OIS": 0.9100954708092115,
+      "AP": 0.9052131868765914,
+      "avg_time_s": 0.5182980621854464,
+      "type": "ml",
+      "n_images": 30,
+      "note": "PyTorch inference on cpu"
+    }
+  }
+}

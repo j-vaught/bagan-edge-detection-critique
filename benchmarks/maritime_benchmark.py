@@ -408,27 +408,36 @@ def main():
         'Very Low SNR Waves': lambda: generate_wave_field(noise_level=35),
     }
 
-    all_scores = {}
+    n_trials = int(os.environ.get("MARITIME_TRIALS", 10))
+    base_seed = int(os.environ.get("MARITIME_BASE_SEED", 1234))
 
-    for scene_name, gen_fn in scenes.items():
-        print(f"\n--- {scene_name} ---")
-        img, gt = gen_fn()
+    all_scores = {scene_name: {} for scene_name in scenes}
+    representative_scores = {}
 
-        # Create RGB version for ML models (stack grayscale)
-        img_rgb = np.stack([img, img, img], axis=-1).astype(np.uint8)
+    for trial_idx in range(n_trials):
+        print(f"\n=== Trial {trial_idx + 1}/{n_trials} ===")
+        for scene_offset, (scene_name, gen_fn) in enumerate(scenes.items()):
+            scene_seed = base_seed + trial_idx * 100 + scene_offset
+            np.random.seed(scene_seed)
+            print(f"\n--- {scene_name} (seed={scene_seed}) ---")
+            img, gt = gen_fn()
 
-        results = run_all_methods(img, img_rgb)
+            # Create RGB version for ML models (stack grayscale)
+            img_rgb = np.stack([img, img, img], axis=-1).astype(np.uint8)
+            results = run_all_methods(img, img_rgb)
 
-        scene_scores = {}
-        for method_name, edge_map in results.items():
-            best_f, best_t = find_best_threshold(edge_map, gt)
-            scene_scores[method_name] = best_f
-            print(f"  {method_name}: F={best_f:.4f} (t={best_t:.2f})")
+            if trial_idx == 0:
+                representative_scores[scene_name] = {}
 
-        all_scores[scene_name] = scene_scores
+            for method_name, edge_map in results.items():
+                best_f, best_t = find_best_threshold(edge_map, gt)
+                all_scores[scene_name].setdefault(method_name, []).append(best_f)
+                if trial_idx == 0:
+                    representative_scores[scene_name][method_name] = best_f
+                print(f"  {method_name}: F={best_f:.4f} (t={best_t:.2f})")
 
-        # Generate comparison figure
-        plot_comparison(img, results, gt, scene_name, RESULTS_DIR)
+            if trial_idx == 0:
+                plot_comparison(img, results, gt, scene_name, RESULTS_DIR)
 
     # Summary table
     print("\n" + "=" * 70)
@@ -437,28 +446,43 @@ def main():
 
     method_avgs = {}
     for scene, scores in all_scores.items():
-        for method, f in scores.items():
-            if method not in method_avgs:
-                method_avgs[method] = []
-            method_avgs[method].append(f)
+        for method, score_list in scores.items():
+            method_avgs.setdefault(method, [])
+            method_avgs[method].extend(score_list)
 
     report_lines = ["# Maritime Benchmark Results\n"]
+    report_lines.append("## Benchmark Design\n")
+    report_lines.append(f"- Scene families: {len(scenes)}")
+    report_lines.append(f"- Trials per scene family: {n_trials}")
+    report_lines.append(f"- Base seed: {base_seed}")
+    report_lines.append(
+        "- Each report value below is an aggregate across repeated random draws of the synthetic scene generator."
+    )
+    report_lines.append("")
     report_lines.append("## Average F-score Across All Synthetic Maritime Scenes\n")
-    report_lines.append("| Method | Avg F-score | Scenes |")
-    report_lines.append("|--------|----------:|-------:|")
+    report_lines.append("| Method | Avg F-score | Std | 95% CI | Samples |")
+    report_lines.append("|--------|------------:|----:|--------:|--------:|")
 
     for method, scores in sorted(method_avgs.items(), key=lambda x: -np.mean(x[1])):
-        avg = np.mean(scores)
-        report_lines.append(f"| {method} | {avg:.4f} | {len(scores)} |")
-        print(f"  {method}: avg F={avg:.4f}")
+        avg = float(np.mean(scores))
+        std = float(np.std(scores))
+        ci95 = 1.96 * std / np.sqrt(len(scores)) if scores else 0.0
+        report_lines.append(f"| {method} | {avg:.4f} | {std:.4f} | {ci95:.4f} | {len(scores)} |")
+        print(f"  {method}: avg F={avg:.4f}  std={std:.4f}  ci95={ci95:.4f}")
 
     report_lines.append("\n## Per-Scene Results\n")
     for scene, scores in all_scores.items():
         report_lines.append(f"### {scene}\n")
-        report_lines.append("| Method | F-score |")
-        report_lines.append("|--------|--------:|")
-        for method, f in sorted(scores.items(), key=lambda x: -x[1]):
-            report_lines.append(f"| {method} | {f:.4f} |")
+        report_lines.append("| Method | Mean F-score | Std | 95% CI | Trials |")
+        report_lines.append("|--------|-------------:|----:|--------:|-------:|")
+        scene_stats = []
+        for method, score_list in scores.items():
+            avg = float(np.mean(score_list))
+            std = float(np.std(score_list))
+            ci95 = 1.96 * std / np.sqrt(len(score_list)) if score_list else 0.0
+            scene_stats.append((method, avg, std, ci95, len(score_list)))
+        for method, avg, std, ci95, count in sorted(scene_stats, key=lambda x: -x[1]):
+            report_lines.append(f"| {method} | {avg:.4f} | {std:.4f} | {ci95:.4f} | {count} |")
         report_lines.append("")
 
     report_path = RESULTS_DIR / "maritime_report.md"
@@ -468,7 +492,36 @@ def main():
 
     # Save raw JSON
     with open(RESULTS_DIR / "maritime_results.json", 'w') as f:
-        json.dump(all_scores, f, indent=2)
+        json.dump({
+            "meta": {
+                "scene_families": len(scenes),
+                "trials_per_scene": n_trials,
+                "base_seed": base_seed,
+            },
+            "overall": {
+                method: {
+                    "mean": float(np.mean(scores)),
+                    "std": float(np.std(scores)),
+                    "ci95": float(1.96 * np.std(scores) / np.sqrt(len(scores))) if scores else 0.0,
+                    "samples": len(scores),
+                }
+                for method, scores in method_avgs.items()
+            },
+            "by_scene": {
+                scene: {
+                    method: {
+                        "mean": float(np.mean(score_list)),
+                        "std": float(np.std(score_list)),
+                        "ci95": float(1.96 * np.std(score_list) / np.sqrt(len(score_list))) if score_list else 0.0,
+                        "samples": len(score_list),
+                        "scores": score_list,
+                    }
+                    for method, score_list in scores.items()
+                }
+                for scene, scores in all_scores.items()
+            },
+            "representative_trial": representative_scores,
+        }, f, indent=2)
 
 
 if __name__ == "__main__":

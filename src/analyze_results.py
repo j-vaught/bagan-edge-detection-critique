@@ -39,6 +39,40 @@ RESULTS_DIR = Path(__file__).parent.parent / "results"
 RESULTS_DIR.mkdir(exist_ok=True)
 
 
+def angular_error_deg(pred_deg, true_deg):
+    """Smallest orientation error modulo 180 degrees."""
+    return min(
+        abs(pred_deg - true_deg),
+        abs(pred_deg - true_deg + 180.0),
+        abs(pred_deg - true_deg - 180.0),
+    )
+
+
+def sample_parallel_line_points(size, angle_deg, n_points=7, offset_step=10):
+    """Sample points along the center line used by create_parallel_line_image."""
+    angle_rad = np.radians(angle_deg)
+    cos_a = np.cos(angle_rad)
+    sin_a = np.sin(angle_rad)
+    cx = cy = size // 2
+
+    points = []
+    for offset in range(-(n_points // 2), n_points // 2 + 1):
+        px = int(round(cx + offset * offset_step * cos_a))
+        py = int(round(cy + offset * offset_step * sin_a))
+        points.append((px, py))
+    return points
+
+
+def wvf_orientation_profile(image, x, y, np_count=15, order=4, n_orientations=18):
+    """Evaluate WVF derivative magnitude at one pixel across orientations."""
+    angles = np.linspace(0, np.pi, n_orientations, endpoint=False)
+    profile = []
+    for theta in angles:
+        fx, _, _ = wvf_single_pixel(image, x, y, np_count=np_count, order=order, theta=theta)
+        profile.append(abs(fx))
+    return angles, np.array(profile)
+
+
 def test_condition_numbers():
     """Test 1: Analyze numerical stability of WVF least-squares system."""
     print("=" * 60)
@@ -74,12 +108,10 @@ def test_condition_numbers():
 
     report_lines.append("")
     report_lines.append("**Finding:** " + (
-        "Condition numbers remain stable across orientations for small Np but grow "
-        "significantly with large Np, suggesting potential numerical instability "
-        "for the Np=250 used in the papers."
-        if results[250].max() > 1e10
-        else "Condition numbers remain reasonable across all tested Np values, "
-             "suggesting the least-squares system is well-conditioned."
+        "Condition numbers stay well below catastrophic failure, but they grow "
+        "substantially with large Np and reach the 1e5 range at Np=250. "
+        "That is compatible with a solvable double-precision system, yet it is "
+        "large enough to merit discussion as a numerical-stability concern."
     ))
 
     for line in report_lines:
@@ -92,73 +124,134 @@ def test_angle_accuracy():
     print("\n" + "=" * 60)
     print("TEST 2: Angle Detection Accuracy (Spline vs Arctan)")
     print("=" * 60)
+    np.random.seed(1234)
 
+    report_lines = ["## Test 2: Angle Detection Accuracy\n"]
     test_angles = [0, 23, 63.5, 90, 135, 174]
-    snr = 2.0
-    size = 256
+    snr_levels = [2.0, 1.0, 0.75]
+    size = 128
 
-    img, clean, angle_map = create_multi_angle_line_image(
-        size=size, angles_deg=test_angles, snr=snr
+    representative_img, representative_clean, _ = create_multi_angle_line_image(
+        size=256, angles_deg=test_angles, snr=2.0
     )
-
-    np.save(RESULTS_DIR / 'angle_test_image.npy', img)
-
+    np.save(RESULTS_DIR / 'angle_test_image.npy', representative_img)
     fig, axes = plt.subplots(1, 2, figsize=(12, 5))
-    axes[0].imshow(clean, cmap='gray')
-    axes[0].set_title('Clean Image')
-    axes[1].imshow(img, cmap='gray')
-    axes[1].set_title(f'With Noise (SNR={snr})')
+    axes[0].imshow(representative_clean, cmap='gray')
+    axes[0].set_title('Clean Multi-Angle Image')
+    axes[1].imshow(representative_img, cmap='gray')
+    axes[1].set_title('Noisy Multi-Angle Image (SNR=2.0)')
     fig.savefig(RESULTS_DIR / 'angle_test_images.png', dpi=150, bbox_inches='tight')
     plt.close(fig)
 
-    report_lines = ["## Test 2: Angle Detection Accuracy\n"]
+    per_snr = []
+    detailed_rows = []
 
-    print("Computing Sobel gradients for arctan baseline...")
-    gx, gy, mag, sobel_angle = sobel_gradients(img)
-
-    report_lines.append("### Arctan (Sobel) Angle Predictions")
-    report_lines.append("| True Normal Angle | Sobel Arctan Prediction | Error |")
-    report_lines.append("|-----------------:|------------------------:|------:|")
-
-    edge_mask = angle_map >= 0
-    for true_angle in sorted(set(angle_map[edge_mask])):
-        if true_angle < 0:
-            continue
-        mask = (angle_map == true_angle) & (mag > np.percentile(mag[edge_mask], 50))
-        if np.sum(mask) == 0:
-            continue
-        predicted_angles = np.degrees(sobel_angle[mask])
-        median_pred = np.median(predicted_angles)
-        error = min(abs(median_pred - true_angle),
-                    abs(median_pred - true_angle + 180),
-                    abs(median_pred - true_angle - 180))
-        report_lines.append(f"| {true_angle:.1f} | {median_pred:.3f} | {error:.3f} |")
-        print(f"  True={true_angle:.1f}, Sobel arctan median={median_pred:.3f}, error={error:.3f}")
-
-    report_lines.append("")
-
-    print("\nComputing WVF gradients (small test, Np=15, 18 orientations)...")
+    print("Computing direct spline-vs-arctan comparisons...")
     start = time.time()
-    small_img = img[96:160, 96:160]
-    wvf_mag, wvf_ang, wvf_conds = wvf_image(
-        small_img, np_count=15, order=4, n_orientations=18
-    )
-    wvf_time = time.time() - start
-    print(f"  WVF completed in {wvf_time:.1f}s on {small_img.shape} image")
+    for snr in snr_levels:
+        sobel_errors = []
+        spline_errors = []
+        improvements = []
 
-    report_lines.append(f"### WVF Gradient Computation")
-    report_lines.append(f"- Image size: {small_img.shape}")
-    report_lines.append(f"- Np=15, order=4, 18 orientations")
-    report_lines.append(f"- Time: {wvf_time:.1f}s")
-    report_lines.append(f"- Max gradient magnitude: {wvf_mag.max():.4f}")
+        for angle_deg in test_angles:
+            img, _, true_angle = create_parallel_line_image(
+                size=size, n_lines=1, spacing=30, angle_deg=angle_deg, snr=snr
+            )
+            _, _, sobel_mag, sobel_angle = sobel_gradients(img)
+            sample_points = sample_parallel_line_points(size=size, angle_deg=angle_deg, n_points=7)
+
+            point_sobel_errors = []
+            point_spline_errors = []
+            for px, py in sample_points:
+                y0 = max(py - 1, 0)
+                y1 = min(py + 2, size)
+                x0 = max(px - 1, 0)
+                x1 = min(px + 2, size)
+                local_mag = sobel_mag[y0:y1, x0:x1]
+                local_idx = np.argmax(local_mag)
+                ly, lx = np.unravel_index(local_idx, local_mag.shape)
+                best_x = x0 + lx
+                best_y = y0 + ly
+
+                sobel_pred_deg = np.degrees(sobel_angle[best_y, best_x])
+                sobel_err = angular_error_deg(sobel_pred_deg, true_angle)
+                point_sobel_errors.append(sobel_err)
+
+                angles_rad, profile = wvf_orientation_profile(
+                    img, best_x, best_y, np_count=15, order=4, n_orientations=18
+                )
+                spline_angle, _, _ = cubic_spline_angle(profile, angles_rad)
+                spline_pred_deg = np.degrees(spline_angle)
+                spline_err = angular_error_deg(spline_pred_deg, true_angle)
+                point_spline_errors.append(spline_err)
+
+            sobel_med = float(np.median(point_sobel_errors))
+            spline_med = float(np.median(point_spline_errors))
+            sobel_errors.append(sobel_med)
+            spline_errors.append(spline_med)
+            improvements.append(sobel_med - spline_med)
+
+            if snr == 2.0:
+                detailed_rows.append((true_angle, sobel_med, spline_med, sobel_med - spline_med))
+            print(
+                f"  SNR={snr:.2f} angle={true_angle:.1f}: "
+                f"Sobel={sobel_med:.3f}°, Spline={spline_med:.3f}°"
+            )
+
+        per_snr.append({
+            "snr": snr,
+            "sobel_mean": float(np.mean(sobel_errors)),
+            "spline_mean": float(np.mean(spline_errors)),
+            "improvement_mean": float(np.mean(improvements)),
+            "sobel_max": float(np.max(sobel_errors)),
+            "spline_max": float(np.max(spline_errors)),
+        })
+
+    elapsed = time.time() - start
+    print(f"  Completed direct angle comparison in {elapsed:.1f}s")
+
+    fig, ax = plt.subplots(figsize=(10, 4.5))
+    x = np.arange(len(detailed_rows))
+    width = 0.35
+    ax.bar(x - width/2, [row[1] for row in detailed_rows], width, label='Sobel arctan')
+    ax.bar(x + width/2, [row[2] for row in detailed_rows], width, label='WVF + spline')
+    ax.set_xticks(x)
+    ax.set_xticklabels([f"{row[0]:.1f}°" for row in detailed_rows], rotation=45, ha='right')
+    ax.set_ylabel('Median Angular Error (degrees)')
+    ax.set_title('Angle Error by True Edge Normal (SNR=2.0, Np=15)')
+    ax.grid(axis='y', alpha=0.3)
+    ax.legend()
+    fig.tight_layout()
+    fig.savefig(RESULTS_DIR / 'angle_error_comparison.png', dpi=150, bbox_inches='tight')
+    plt.close(fig)
+
+    report_lines.append("### Direct WVF Spline vs Sobel Arctan Comparison")
+    report_lines.append("| True Normal Angle | Sobel Median Error | WVF+Spline Median Error | Improvement |")
+    report_lines.append("|-----------------:|-------------------:|------------------------:|------------:|")
+    for true_angle, sobel_err, spline_err, improvement in detailed_rows:
+        report_lines.append(
+            f"| {true_angle:.1f} | {sobel_err:.3f} | {spline_err:.3f} | {improvement:.3f} |"
+        )
+
     report_lines.append("")
+    report_lines.append("### Error Summary by SNR")
+    report_lines.append("| SNR | Mean Sobel Error | Mean WVF+Spline Error | Mean Improvement | Max Sobel Error | Max WVF+Spline Error |")
+    report_lines.append("|---:|------------------:|----------------------:|-----------------:|----------------:|---------------------:|")
+    for row in per_snr:
+        report_lines.append(
+            f"| {row['snr']:.2f} | {row['sobel_mean']:.3f} | {row['spline_mean']:.3f} | "
+            f"{row['improvement_mean']:.3f} | {row['sobel_max']:.3f} | {row['spline_max']:.3f} |"
+        )
 
+    report_lines.append("")
     report_lines.append("### Key Finding on Angle Accuracy")
     report_lines.append(
-        "The papers claim <1 degree accuracy with cubic splines at SNR > 0.75. "
-        "Our Sobel arctan baseline shows the errors that motivate this work. "
-        "The WVF approach of evaluating at many orientations provides a richer "
-        "gradient profile for spline fitting, which is the core contribution."
+        "Unlike the earlier draft, this test directly evaluates the spline estimator. "
+        "At the tractable setting used here (Np=15, 18 orientations), we do not reproduce "
+        "the paper's claimed angular advantage: WVF+Spline is usually worse than Sobel arctan "
+        "on this test and does not support a sub-degree accuracy claim. That may reflect the "
+        "reduced Np/orientation setting, but it means the strong angle-accuracy claim should "
+        "not be presented as independently verified in this repo."
     )
 
     for line in report_lines:
@@ -171,6 +264,7 @@ def test_snr_robustness():
     print("\n" + "=" * 60)
     print("TEST 3: SNR Robustness")
     print("=" * 60)
+    np.random.seed(2345)
 
     snr_levels = [0.5, 0.75, 1.0, 2.0]
     fig, axes = plt.subplots(len(snr_levels), 4, figsize=(16, 4 * len(snr_levels)))
@@ -239,45 +333,65 @@ def test_runtime_scaling():
     print("\n" + "=" * 60)
     print("TEST 4: Runtime Comparison")
     print("=" * 60)
+    np.random.seed(3456)
+
+    report_lines = ["## Test 4: Runtime Comparison\n"]
+    same_region = np.random.rand(32, 32) * 255
+    same_region_results = runtime_comparison(same_region, n_runs=10)
+    region_pixels = same_region.size
+
+    report_lines.append("### Same-Region CPU Timing (32x32 Input for Every Method)")
+    report_lines.append("| Method | Mean Time (s) | Std Time (s) | us / input pixel |")
+    report_lines.append("|--------|-------------:|-------------:|-----------------:|")
+
+    for name, data in same_region_results.items():
+        us_per_pixel = data['mean_time'] * 1e6 / region_pixels
+        report_lines.append(
+            f"| {name} | {data['mean_time']:.6f} | {data['std_time']:.6f} | {us_per_pixel:.2f} |"
+        )
+        print(f"  32x32 {name}: {data['mean_time']:.6f}s ({us_per_pixel:.2f} us/pixel)")
+
+    wvf_start = time.time()
+    wvf_image(same_region, np_count=15, order=4, n_orientations=18)
+    wvf_time = time.time() - wvf_start
+
+    lf_start = time.time()
+    lf_image(
+        same_region, half_width=3, np_count=15,
+        order=4, n_orientations=18, subsample=2
+    )
+    lf_time = time.time() - lf_start
+
+    report_lines.append(
+        f"| WVF (Np=15, 18 orient) | {wvf_time:.6f} | - | {wvf_time * 1e6 / region_pixels:.2f} |"
+    )
+    report_lines.append(
+        f"| LF (m=3, Np=15, 18 orient, sub2) | {lf_time:.6f} | - | {lf_time * 1e6 / region_pixels:.2f} |"
+    )
+    report_lines.append("")
+
+    print(f"  32x32 WVF: {wvf_time:.2f}s ({wvf_time * 1e6 / region_pixels:.2f} us/pixel)")
+    print(f"  32x32 LF: {lf_time:.2f}s ({lf_time * 1e6 / region_pixels:.2f} us/pixel)")
 
     sizes = [64, 128, 256]
-    report_lines = ["## Test 4: Runtime Comparison\n"]
-
+    report_lines.append("### Classical Filter Scaling")
+    report_lines.append("| Image Size | Sobel 3x3 (s) | Prewitt 3x3 (s) | Extended Sobel 7x7 (s) |")
+    report_lines.append("|-----------:|--------------:|----------------:|------------------------:|")
     for size in sizes:
         img = np.random.rand(size, size) * 255
         results = runtime_comparison(img, n_runs=3)
+        report_lines.append(
+            f"| {size}x{size} | {results['Sobel (3x3)']['mean_time']:.6f} | "
+            f"{results['Prewitt (3x3)']['mean_time']:.6f} | "
+            f"{results['Extended Sobel (7x7)']['mean_time']:.6f} |"
+        )
 
-        report_lines.append(f"### Image Size: {size}x{size}")
-        report_lines.append("| Method | Mean Time (s) | Std Time (s) |")
-        report_lines.append("|--------|-------------:|-------------:|")
-
-        for name, data in results.items():
-            report_lines.append(
-                f"| {name} | {data['mean_time']:.6f} | {data['std_time']:.6f} |"
-            )
-            print(f"  {size}x{size} {name}: {data['mean_time']:.6f}s")
-
-        wvf_start = time.time()
-        wvf_mag, _, _ = wvf_image(img[:32, :32], np_count=15, order=4, n_orientations=18)
-        wvf_time = time.time() - wvf_start
-
-        lf_start = time.time()
-        lf_mag, _, _ = lf_image(img[:32, :32], half_width=3, np_count=15,
-                                 order=4, n_orientations=18, subsample=2)
-        lf_time = time.time() - lf_start
-
-        report_lines.append(f"| WVF (Np=15, 18 orient, 32x32 crop) | {wvf_time:.6f} | - |")
-        report_lines.append(f"| LF (m=3, Np=15, 18 orient, 32x32 sub2) | {lf_time:.6f} | - |")
-        report_lines.append("")
-
-        print(f"  WVF 32x32: {wvf_time:.2f}s, LF 32x32: {lf_time:.2f}s")
-
+    report_lines.append("")
     report_lines.append(
-        "**Finding:** The WVF and LF are orders of magnitude slower than Sobel/Prewitt. "
-        "This is expected since they evaluate many more pixels per computation. "
-        "The papers acknowledge GPU parallelization is needed but do not provide "
-        "timing comparisons, which is a significant omission for a method proposed "
-        "for real-time autonomous vehicle applications."
+        "**Finding:** When all methods are timed on the same 32x32 CPU region, WVF and LF remain "
+        "orders of magnitude slower per input pixel than Sobel/Prewitt. This is a materially "
+        "cleaner comparison than the earlier mixed-size table and still supports the critique that "
+        "runtime analysis is an essential omission in the source papers."
     )
 
     for line in report_lines:
@@ -444,10 +558,10 @@ def generate_written_critique():
    expansion is novel and well-motivated.
 2. The approach of evaluating gradients at many orientations (rather than
    only x/y decomposition) is a genuine improvement for angular accuracy.
-3. The cubic spline angle detection method is elegant and produces
-   demonstrably better angle estimates than arctan.
-4. Performance in low-SNR aquatic environments is impressive and fills
-   a real gap in the literature.
+3. The cubic spline angle detection method is elegant conceptually, but our
+   tractable reproduction does not independently verify the paper's accuracy claim.
+4. The low-SNR aquatic use case is clearly important; our synthetic maritime
+   replications confirm it remains genuinely difficult for conventional methods.
 5. The work is clearly funded by ONR and addresses a genuine Navy need
    for littoral environment image processing.
 """
@@ -484,13 +598,12 @@ def main():
     report_sections.append("# Summary\n")
     report_sections.append(
         "The core mathematical approach (2D Taylor expansion for gradient computation) "
-        "is sound and verified. The WVF/LF genuinely improve gradient quality in noisy "
-        "conditions by incorporating more pixel information. However, the experimental "
-        "methodology has significant gaps: unfair compute-normalized comparisons, "
-        "insufficient sample sizes for statistical claims, missing runtime analysis, "
-        "and overreaching conclusions about ML approaches. The work addresses a real "
-        "problem (edge detection in challenging aquatic environments) but the claims "
-        "extend well beyond what the evidence supports."
+        "is sound and verified. Our direct angle test does not reproduce the paper's "
+        "strong spline-accuracy claim at tractable WVF settings, while the broader "
+        "performance claims remain limited by compute-heavy WVF/LF "
+        "evaluation and small-sample or synthetic test regimes. The major issues are "
+        "still experimental fairness, runtime transparency, statistical power, and "
+        "overreach in some of the source-paper conclusions."
     )
 
     report_path = RESULTS_DIR / "critique_report.md"

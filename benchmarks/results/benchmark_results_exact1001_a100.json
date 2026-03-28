@@ -1,0 +1,105 @@
+{
+  "meta": {
+    "dataset": "BSDS500",
+    "images_available": 200,
+    "images_used": 50,
+    "n_thresholds": 1001,
+    "match_radius": 3,
+    "runtime": {
+      "hostname": "node035",
+      "python_version": "3.12.4",
+      "platform": "Linux-5.14.0-362.8.1.el9_3.x86_64-x86_64-with-glibc2.34",
+      "numpy_version": "1.26.4",
+      "torch_version": "2.3.1+cu121",
+      "cuda_available": true,
+      "cuda_device_count": 1,
+      "benchmark_note": "Traditional filters and WVF/LF run in NumPy/SciPy on CPU. ML models use PyTorch and only run on GPU when torch.cuda.is_available() is true.",
+      "cuda_devices": [
+        "NVIDIA A100-SXM4-40GB"
+      ]
+    }
+  },
+  "results": {
+    "Sobel-3x3": {
+      "ODS": 0.449481716199964,
+      "OIS": 0.45869183054648216,
+      "AP": 0.3583204535369784,
+      "avg_time_s": 0.006360575929284096,
+      "type": "traditional"
+    },
+    "Sobel-5x5": {
+      "ODS": 0.46411209814371795,
+      "OIS": 0.468086842875637,
+      "AP": 0.3786098639293386,
+      "avg_time_s": 0.006370497066527605,
+      "type": "traditional"
+    },
+    "Sobel-7x7": {
+      "ODS": 0.4925749227871546,
+      "OIS": 0.5000977981576715,
+      "AP": 0.41327988255232484,
+      "avg_time_s": 0.006723182015120983,
+      "type": "traditional"
+    },
+    "Sobel-9x9": {
+      "ODS": 0.5159330970730103,
+      "OIS": 0.5246995681451113,
+      "AP": 0.4393609234295418,
+      "avg_time_s": 0.007125409189611674,
+      "type": "traditional"
+    },
+    "Sobel-15x15": {
+      "ODS": 0.5490685890626333,
+      "OIS": 0.5550302252912686,
+      "AP": 0.4682201883644161,
+      "avg_time_s": 0.008196944780647754,
+      "type": "traditional"
+    },
+    "Prewitt-3x3": {
+      "ODS": 0.45336538114718206,
+      "OIS": 0.4613461125133552,
+      "AP": 0.3588502459889992,
+      "avg_time_s": 0.006427936516702175,
+      "type": "traditional"
+    },
+    "Canny-sigma1": {
+      "ODS": 0.20123237021189902,
+      "OIS": 0.19394260210851538,
+      "AP": 0.055622716500392896,
+      "avg_time_s": 0.014021298736333848,
+      "type": "traditional"
+    },
+    "Canny-sigma2": {
+      "ODS": 0.30336539653165145,
+      "OIS": 0.28978288589257967,
+      "AP": 0.08617811472805482,
+      "avg_time_s": 0.01378388736397028,
+      "type": "traditional"
+    },
+    "LoG-sigma2": {
+      "ODS": 0.38264064647735524,
+      "OIS": 0.3864470075296442,
+      "AP": 0.2829420771848147,
+      "avg_time_s": 0.21315427443012594,
+      "type": "traditional"
+    },
+    "TEED": {
+      "ODS": 0.4709627032383347,
+      "OIS": 0.4746646985237538,
+      "AP": 0.35977525021181755,
+      "avg_time_s": 0.045031709894537926,
+      "type": "ml",
+      "n_images": 50,
+      "note": "PyTorch inference on cuda"
+    },
+    "DexiNed": {
+      "ODS": 0.49497869181686455,
+      "OIS": 0.5058284697180199,
+      "AP": 0.39900220778428425,
+      "avg_time_s": 0.037015968523919585,
+      "type": "ml",
+      "n_images": 50,
+      "note": "PyTorch inference on cuda"
+    }
+  }
+}

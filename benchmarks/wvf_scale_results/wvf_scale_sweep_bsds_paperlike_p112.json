@@ -1,0 +1,564 @@
+{
+  "rows": [
+    {
+      "dataset": "BSDS500",
+      "method": "WVF",
+      "np_count": 15,
+      "half_width": null,
+      "resize_shape": [
+        64,
+        64
+      ],
+      "ods": 0.0,
+      "ois": 0.0,
+      "ap": 0.0,
+      "seconds_per_image": 673.6351544141769
+    },
+    {
+      "dataset": "BSDS500",
+      "method": "LF",
+      "np_count": 15,
+      "half_width": 3,
+      "resize_shape": [
+        64,
+        64
+      ],
+      "ods": 0.0,
+      "ois": 0.0,
+      "ap": 0.0,
+      "seconds_per_image": 2169.175190446526
+    },
+    {
+      "dataset": "BSDS500",
+      "method": "LF",
+      "np_count": 15,
+      "half_width": 7,
+      "resize_shape": [
+        64,
+        64
+      ],
+      "ods": 0.0,
+      "ois": 0.0,
+      "ap": 0.0,
+      "seconds_per_image": 3204.687728459388
+    },
+    {
+      "dataset": "BSDS500",
+      "method": "LF",
+      "np_count": 15,
+      "half_width": 14,
+      "resize_shape": [
+        64,
+        64
+      ],
+      "ods": 0.0,
+      "ois": 0.0,
+      "ap": 0.0,
+      "seconds_per_image": 2588.1248892627655
+    },
+    {
+      "dataset": "BSDS500",
+      "method": "WVF",
+      "np_count": 50,
+      "half_width": null,
+      "resize_shape": [
+        64,
+        64
+      ],
+      "ods": 0.0,
+      "ois": 0.0,
+      "ap": 0.0,
+      "seconds_per_image": 749.2026936486363
+    },
+    {
+      "dataset": "BSDS500",
+      "method": "LF",
+      "np_count": 50,
+      "half_width": 3,
+      "resize_shape": [
+        64,
+        64
+      ],
+      "ods": 0.0,
+      "ois": 0.0,
+      "ap": 0.0,
+      "seconds_per_image": 2667.835015319288
+    },
+    {
+      "dataset": "BSDS500",
+      "method": "LF",
+      "np_count": 50,
+      "half_width": 7,
+      "resize_shape": [
+        64,
+        64
+      ],
+      "ods": 0.0,
+      "ois": 0.0,
+      "ap": 0.0,
+      "seconds_per_image": 3899.8018397256733
+    },
+    {
+      "dataset": "BSDS500",
+      "method": "LF",
+      "np_count": 50,
+      "half_width": 14,
+      "resize_shape": [
+        64,
+        64
+      ],
+      "ods": 0.0,
+      "ois": 0.0,
+      "ap": 0.0,
+      "seconds_per_image": 2991.7483746133744
+    },
+    {
+      "dataset": "BSDS500",
+      "method": "WVF",
+      "np_count": 100,
+      "half_width": null,
+      "resize_shape": [
+        64,
+        64
+      ],
+      "ods": 0.0,
+      "ois": 0.0,
+      "ap": 0.0,
+      "seconds_per_image": 817.6584258720279
+    },
+    {
+      "dataset": "BSDS500",
+      "method": "LF",
+      "np_count": 100,
+      "half_width": 3,
+      "resize_shape": [
+        64,
+        64
+      ],
+      "ods": 0.0,
+      "ois": 0.0,
+      "ap": 0.0,
+      "seconds_per_image": 3178.5126416690646
+    },
+    {
+      "dataset": "BSDS500",
+      "method": "LF",
+      "np_count": 100,
+      "half_width": 7,
+      "resize_shape": [
+        64,
+        64
+      ],
+      "ods": 0.0,
+      "ois": 0.0,
+      "ap": 0.0,
+      "seconds_per_image": 4406.598130322993
+    },
+    {
+      "dataset": "BSDS500",
+      "method": "LF",
+      "np_count": 100,
+      "half_width": 14,
+      "resize_shape": [
+        64,
+        64
+      ],
+      "ods": 0.0,
+      "ois": 0.0,
+      "ap": 0.0,
+      "seconds_per_image": 2975.3862564384935
+    },
+    {
+      "dataset": "BSDS500",
+      "method": "WVF",
+      "np_count": 150,
+      "half_width": null,
+      "resize_shape": [
+        64,
+        64
+      ],
+      "ods": 0.0,
+      "ois": 0.0,
+      "ap": 0.0,
+      "seconds_per_image": 858.4589598737657
+    },
+    {
+      "dataset": "BSDS500",
+      "method": "LF",
+      "np_count": 150,
+      "half_width": 3,
+      "resize_shape": [
+        64,
+        64
+      ],
+      "ods": 0.0,
+      "ois": 0.0,
+      "ap": 0.0,
+      "seconds_per_image": 3579.837135670334
+    },
+    {
+      "dataset": "BSDS500",
+      "method": "LF",
+      "np_count": 150,
+      "half_width": 7,
+      "resize_shape": [
+        64,
+        64
+      ],
+      "ods": 0.0,
+      "ois": 0.0,
+      "ap": 0.0,
+      "seconds_per_image": 4787.850065479428
+    },
+    {
+      "dataset": "BSDS500",
+      "method": "LF",
+      "np_count": 150,
+      "half_width": 14,
+      "resize_shape": [
+        64,
+        64
+      ],
+      "ods": 0.0,
+      "ois": 0.0,
+      "ap": 0.0,
+      "seconds_per_image": 2988.7250109009447
+    },
+    {
+      "dataset": "BSDS500",
+      "method": "WVF",
+      "np_count": 250,
+      "half_width": null,
+      "resize_shape": [
+        64,
+        64
+      ],
+      "ods": 0.0,
+      "ois": 0.0,
+      "ap": 0.0,
+      "seconds_per_image": 951.2909642845392
+    },
+    {
+      "dataset": "BSDS500",
+      "method": "LF",
+      "np_count": 250,
+      "half_width": 3,
+      "resize_shape": [
+        64,
+        64
+      ],
+      "ods": 0.0,
+      "ois": 0.0,
+      "ap": 0.0,
+      "seconds_per_image": 4138.0743490457535
+    },
+    {
+      "dataset": "BSDS500",
+      "method": "LF",
+      "np_count": 250,
+      "half_width": 7,
+      "resize_shape": [
+        64,
+        64
+      ],
+      "ods": 0.0,
+      "ois": 0.0,
+      "ap": 0.0,
+      "seconds_per_image": 5150.104836440832
+    },
+    {
+      "dataset": "BSDS500",
+      "method": "LF",
+      "np_count": 250,
+      "half_width": 14,
+      "resize_shape": [
+        64,
+        64
+      ],
+      "ods": 0.0,
+      "ois": 0.0,
+      "ap": 0.0,
+      "seconds_per_image": 2591.5259571157394
+    },
+    {
+      "dataset": "BSDS500",
+      "method": "WVF",
+      "np_count": 15,
+      "half_width": null,
+      "resize_shape": [
+        96,
+        96
+      ],
+      "ods": 0.0,
+      "ois": 0.0,
+      "ap": 0.0,
+      "seconds_per_image": 1632.6402364887297
+    },
+    {
+      "dataset": "BSDS500",
+      "method": "LF",
+      "np_count": 15,
+      "half_width": 3,
+      "resize_shape": [
+        96,
+        96
+      ],
+      "ods": 0.0,
+      "ois": 0.0,
+      "ap": 0.0,
+      "seconds_per_image": 5626.81708112508
+    },
+    {
+      "dataset": "BSDS500",
+      "method": "LF",
+      "np_count": 15,
+      "half_width": 7,
+      "resize_shape": [
+        96,
+        96
+      ],
+      "ods": 0.0,
+      "ois": 0.0,
+      "ap": 0.0,
+      "seconds_per_image": 8091.72426796481
+    },
+    {
+      "dataset": "BSDS500",
+      "method": "LF",
+      "np_count": 15,
+      "half_width": 14,
+      "resize_shape": [
+        96,
+        96
+      ],
+      "ods": 0.0,
+      "ois": 0.0,
+      "ap": 0.0,
+      "seconds_per_image": 9256.010303474963
+    },
+    {
+      "dataset": "BSDS500",
+      "method": "WVF",
+      "np_count": 50,
+      "half_width": null,
+      "resize_shape": [
+        96,
+        96
+      ],
+      "ods": 0.0,
+      "ois": 0.0,
+      "ap": 0.0,
+      "seconds_per_image": 1906.0709393903612
+    },
+    {
+      "dataset": "BSDS500",
+      "method": "LF",
+      "np_count": 50,
+      "half_width": 3,
+      "resize_shape": [
+        96,
+        96
+      ],
+      "ods": 0.0,
+      "ois": 0.0,
+      "ap": 0.0,
+      "seconds_per_image": 6369.551626984775
+    },
+    {
+      "dataset": "BSDS500",
+      "method": "LF",
+      "np_count": 50,
+      "half_width": 7,
+      "resize_shape": [
+        96,
+        96
+      ],
+      "ods": 0.0,
+      "ois": 0.0,
+      "ap": 0.0,
+      "seconds_per_image": 9284.850515259057
+    },
+    {
+      "dataset": "BSDS500",
+      "method": "LF",
+      "np_count": 50,
+      "half_width": 14,
+      "resize_shape": [
+        96,
+        96
+      ],
+      "ods": 0.0,
+      "ois": 0.0,
+      "ap": 0.0,
+      "seconds_per_image": 10095.421483699978
+    },
+    {
+      "dataset": "BSDS500",
+      "method": "WVF",
+      "np_count": 100,
+      "half_width": null,
+      "resize_shape": [
+        96,
+        96
+      ],
+      "ods": 0.0,
+      "ois": 0.0,
+      "ap": 0.0,
+      "seconds_per_image": 2127.809799159318
+    },
+    {
+      "dataset": "BSDS500",
+      "method": "LF",
+      "np_count": 100,
+      "half_width": 3,
+      "resize_shape": [
+        96,
+        96
+      ],
+      "ods": 0.0,
+      "ois": 0.0,
+      "ap": 0.0,
+      "seconds_per_image": 6870.911174614727
+    },
+    {
+      "dataset": "BSDS500",
+      "method": "LF",
+      "np_count": 100,
+      "half_width": 7,
+      "resize_shape": [
+        96,
+        96
+      ],
+      "ods": 0.0,
+      "ois": 0.0,
+      "ap": 0.0,
+      "seconds_per_image": 9328.08274897784
+    },
+    {
+      "dataset": "BSDS500",
+      "method": "LF",
+      "np_count": 100,
+      "half_width": 14,
+      "resize_shape": [
+        96,
+        96
+      ],
+      "ods": 0.0,
+      "ois": 0.0,
+      "ap": 0.0,
+      "seconds_per_image": 10027.623235484212
+    },
+    {
+      "dataset": "BSDS500",
+      "method": "WVF",
+      "np_count": 150,
+      "half_width": null,
+      "resize_shape": [
+        96,
+        96
+      ],
+      "ods": 0.0,
+      "ois": 0.0,
+      "ap": 0.0,
+      "seconds_per_image": 2245.0282884471117
+    },
+    {
+      "dataset": "BSDS500",
+      "method": "LF",
+      "np_count": 150,
+      "half_width": 3,
+      "resize_shape": [
+        96,
+        96
+      ],
+      "ods": 0.0,
+      "ois": 0.0,
+      "ap": 0.0,
+      "seconds_per_image": 7435.128002388776
+    },
+    {
+      "dataset": "BSDS500",
+      "method": "LF",
+      "np_count": 150,
+      "half_width": 7,
+      "resize_shape": [
+        96,
+        96
+      ],
+      "ods": 0.0,
+      "ois": 0.0,
+      "ap": 0.0,
+      "seconds_per_image": 9650.583738203346
+    },
+    {
+      "dataset": "BSDS500",
+      "method": "LF",
+      "np_count": 150,
+      "half_width": 14,
+      "resize_shape": [
+        96,
+        96
+      ],
+      "ods": 0.0,
+      "ois": 0.0,
+      "ap": 0.0,
+      "seconds_per_image": 10116.9059651196
+    },
+    {
+      "dataset": "BSDS500",
+      "method": "WVF",
+      "np_count": 250,
+      "half_width": null,
+      "resize_shape": [
+        96,
+        96
+      ],
+      "ods": 0.0,
+      "ois": 0.0,
+      "ap": 0.0,
+      "seconds_per_image": 2463.966731670499
+    },
+    {
+      "dataset": "BSDS500",
+      "method": "LF",
+      "np_count": 250,
+      "half_width": 3,
+      "resize_shape": [
+        96,
+        96
+      ],
+      "ods": 0.0,
+      "ois": 0.0,
+      "ap": 0.0,
+      "seconds_per_image": 8354.337176831812
+    },
+    {
+      "dataset": "BSDS500",
+      "method": "LF",
+      "np_count": 250,
+      "half_width": 7,
+      "resize_shape": [
+        96,
+        96
+      ],
+      "ods": 0.0,
+      "ois": 0.0,
+      "ap": 0.0,
+      "seconds_per_image": 9845.431975191086
+    },
+    {
+      "dataset": "BSDS500",
+      "method": "LF",
+      "np_count": 250,
+      "half_width": 14,
+      "resize_shape": [
+        96,
+        96
+      ],
+      "ods": 0.0,
+      "ois": 0.0,
+      "ap": 0.0,
+      "seconds_per_image": 9711.069562631845
+    }
+  ]
+}

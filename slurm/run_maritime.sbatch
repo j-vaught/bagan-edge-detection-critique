@@ -13,7 +13,10 @@
 module load python3/anaconda/3.12
 module load cuda/12.1
 export PYTHONNOUSERSITE=1
+mkdir -p $HOME/.bench_pkgs
 export PYTHONPATH=$HOME/.bench_pkgs:$PYTHONPATH
+export MARITIME_TRIALS=${MARITIME_TRIALS:-10}
+export MARITIME_BASE_SEED=${MARITIME_BASE_SEED:-1234}
 
 echo "Starting maritime benchmark at $(date)"
 echo "Node: $(hostname)"

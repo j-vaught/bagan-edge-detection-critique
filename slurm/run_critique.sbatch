@@ -12,8 +12,9 @@
 
 module load python3/anaconda/3.12
 module load cuda/12.1
+export PYTHONNOUSERSITE=1
 
-cd $HOME/bagan-edge-detection-critique
+cd $HOME/edge-detection-filter-critique
 
 echo "Starting critique analysis at $(date)"
 echo "Node: $(hostname)"
@@ -23,5 +24,5 @@ nvidia-smi --query-gpu=name,memory.total --format=csv,noheader 2>/dev/null || ec
 python3 src/analyze_results.py
 
 echo "Completed at $(date)"
-echo "Results in: $HOME/bagan-edge-detection-critique/results/"
+echo "Results in: $HOME/edge-detection-filter-critique/results/"
 ls -la results/

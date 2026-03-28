@@ -97,10 +97,10 @@
    expansion is novel and well-motivated.
 2. The approach of evaluating gradients at many orientations (rather than
    only x/y decomposition) is a genuine improvement for angular accuracy.
-3. The cubic spline angle detection method is elegant and produces
-   demonstrably better angle estimates than arctan.
-4. Performance in low-SNR aquatic environments is impressive and fills
-   a real gap in the literature.
+3. The cubic spline angle detection method is elegant conceptually, but our
+   tractable reproduction does not independently verify the paper's accuracy claim.
+4. The low-SNR aquatic use case is clearly important; our synthetic maritime
+   replications confirm it remains genuinely difficult for conventional methods.
 5. The work is clearly funded by ONR and addresses a genuine Navy need
    for littoral environment image processing.
 
@@ -136,76 +136,64 @@ Testing WVF derivative extraction on known polynomial:
 | 150 | 1.76e+04 | 2.55e+04 | 2.16e+04 | 1.44 |
 | 250 | 1.28e+05 | 1.47e+05 | 1.38e+05 | 1.15 |
 
-**Finding:** Condition numbers remain reasonable across all tested Np values, suggesting the least-squares system is well-conditioned.
+**Finding:** Condition numbers stay well below catastrophic failure, but they grow substantially with large Np and reach the 1e5 range at Np=250. That is compatible with a solvable double-precision system, yet it is large enough to merit discussion as a numerical-stability concern.
 
 ## Test 2: Angle Detection Accuracy
 
-### Arctan (Sobel) Angle Predictions
-| True Normal Angle | Sobel Arctan Prediction | Error |
-|-----------------:|------------------------:|------:|
-| 0.0 | 52.668 | 52.668 |
-| 45.0 | 47.764 | 2.764 |
-| 84.0 | 86.667 | 2.667 |
-| 90.0 | 88.681 | 1.319 |
-| 113.0 | 110.096 | 2.904 |
-| 153.5 | 148.037 | 5.463 |
+### Direct WVF Spline vs Sobel Arctan Comparison
+| True Normal Angle | Sobel Median Error | WVF+Spline Median Error | Improvement |
+|-----------------:|-------------------:|------------------------:|------------:|
+| 90.0 | 13.285 | 22.613 | -9.328 |
+| 113.0 | 12.576 | 29.342 | -16.766 |
+| 153.5 | 16.772 | 22.149 | -5.376 |
+| 0.0 | 11.906 | 18.018 | -6.112 |
+| 45.0 | 19.390 | 23.108 | -3.718 |
+| 84.0 | 14.722 | 23.387 | -8.665 |
 
-### WVF Gradient Computation
-- Image size: (64, 64)
-- Np=15, order=4, 18 orientations
-- Time: 7.2s
-- Max gradient magnitude: 187.5417
+### Error Summary by SNR
+| SNR | Mean Sobel Error | Mean WVF+Spline Error | Mean Improvement | Max Sobel Error | Max WVF+Spline Error |
+|---:|------------------:|----------------------:|-----------------:|----------------:|---------------------:|
+| 2.00 | 14.775 | 23.103 | -8.328 | 19.390 | 29.342 |
+| 1.00 | 25.830 | 29.673 | -3.843 | 49.974 | 60.721 |
+| 0.75 | 30.873 | 33.744 | -2.871 | 47.519 | 57.131 |
 
 ### Key Finding on Angle Accuracy
-The papers claim <1 degree accuracy with cubic splines at SNR > 0.75. Our Sobel arctan baseline shows the errors that motivate this work. The WVF approach of evaluating at many orientations provides a richer gradient profile for spline fitting, which is the core contribution.
+Unlike the earlier draft, this test directly evaluates the spline estimator. At the tractable setting used here (Np=15, 18 orientations), we do not reproduce the paper's claimed angular advantage: WVF+Spline is usually worse than Sobel arctan on this test and does not support a sub-degree accuracy claim. That may reflect the reduced Np/orientation setting, but it means the strong angle-accuracy claim should not be presented as independently verified in this repo.
 
 ## Test 3: SNR Robustness
 
 | SNR | Sobel Edge Pixels | Prewitt Edge Pixels | Canny Edge Pixels |
 |----:|------------------:|--------------------:|------------------:|
-| 0.5 | 3277 | 3277 | 7986 |
-| 0.75 | 3277 | 3277 | 6868 |
-| 1.0 | 3277 | 3277 | 6386 |
-| 2.0 | 3277 | 3277 | 2634 |
+| 0.5 | 3277 | 3277 | 7937 |
+| 0.75 | 3277 | 3277 | 7225 |
+| 1.0 | 3277 | 3277 | 6574 |
+| 2.0 | 3277 | 3277 | 2828 |
 
 **Finding:** At low SNR (0.5-0.75), Sobel and Prewitt produce many false edges due to noise amplification, consistent with Bagan's critique. The WVF's larger neighborhood averaging should theoretically suppress this noise. However, we note that simply using a larger Gaussian pre-filter with Sobel would also achieve this effect -- the WVF's advantage is specifically in combining noise suppression with orientation-specific gradient computation.
 
 ## Test 4: Runtime Comparison
 
-### Image Size: 64x64
-| Method | Mean Time (s) | Std Time (s) |
-|--------|-------------:|-------------:|
-| Sobel (3x3) | 0.000209 | 0.000085 |
-| Prewitt (3x3) | 0.000132 | 0.000010 |
-| Extended Sobel (5x5) | 0.000266 | 0.000118 |
-| Extended Sobel (7x7) | 0.000186 | 0.000015 |
-| WVF (Np=15, 18 orient, 32x32 crop) | 1.803032 | - |
-| LF (m=3, Np=15, 18 orient, 32x32 sub2) | 2.773337 | - |
+### Same-Region CPU Timing (32x32 Input for Every Method)
+| Method | Mean Time (s) | Std Time (s) | us / input pixel |
+|--------|-------------:|-------------:|-----------------:|
+| Sobel (3x3) | 0.000061 | 0.000032 | 0.06 |
+| Prewitt (3x3) | 0.000051 | 0.000006 | 0.05 |
+| Extended Sobel (5x5) | 0.000105 | 0.000031 | 0.10 |
+| Extended Sobel (7x7) | 0.000100 | 0.000014 | 0.10 |
+| WVF (Np=15, 18 orient) | 1.397280 | - | 1364.53 |
+| LF (m=3, Np=15, 18 orient, sub2) | 2.400412 | - | 2344.15 |
 
-### Image Size: 128x128
-| Method | Mean Time (s) | Std Time (s) |
-|--------|-------------:|-------------:|
-| Sobel (3x3) | 0.000667 | 0.000217 |
-| Prewitt (3x3) | 0.000522 | 0.000055 |
-| Extended Sobel (5x5) | 0.000526 | 0.000049 |
-| Extended Sobel (7x7) | 0.000775 | 0.000011 |
-| WVF (Np=15, 18 orient, 32x32 crop) | 1.445124 | - |
-| LF (m=3, Np=15, 18 orient, 32x32 sub2) | 4.722500 | - |
+### Classical Filter Scaling
+| Image Size | Sobel 3x3 (s) | Prewitt 3x3 (s) | Extended Sobel 7x7 (s) |
+|-----------:|--------------:|----------------:|------------------------:|
+| 64x64 | 0.000168 | 0.000120 | 0.000178 |
+| 128x128 | 0.000505 | 0.000462 | 0.000538 |
+| 256x256 | 0.001930 | 0.001862 | 0.002128 |
 
-### Image Size: 256x256
-| Method | Mean Time (s) | Std Time (s) |
-|--------|-------------:|-------------:|
-| Sobel (3x3) | 0.003747 | 0.001493 |
-| Prewitt (3x3) | 0.001960 | 0.000029 |
-| Extended Sobel (5x5) | 0.003404 | 0.000764 |
-| Extended Sobel (7x7) | 0.003444 | 0.001124 |
-| WVF (Np=15, 18 orient, 32x32 crop) | 1.435188 | - |
-| LF (m=3, Np=15, 18 orient, 32x32 sub2) | 4.485475 | - |
-
-**Finding:** The WVF and LF are orders of magnitude slower than Sobel/Prewitt. This is expected since they evaluate many more pixels per computation. The papers acknowledge GPU parallelization is needed but do not provide timing comparisons, which is a significant omission for a method proposed for real-time autonomous vehicle applications.
+**Finding:** When all methods are timed on the same 32x32 CPU region, WVF and LF remain orders of magnitude slower per input pixel than Sobel/Prewitt. This is a materially cleaner comparison than the earlier mixed-size table and still supports the critique that runtime analysis is an essential omission in the source papers.
 
 ---
 
 # Summary
 
-The core mathematical approach (2D Taylor expansion for gradient computation) is sound and verified. The WVF/LF genuinely improve gradient quality in noisy conditions by incorporating more pixel information. However, the experimental methodology has significant gaps: unfair compute-normalized comparisons, insufficient sample sizes for statistical claims, missing runtime analysis, and overreaching conclusions about ML approaches. The work addresses a real problem (edge detection in challenging aquatic environments) but the claims extend well beyond what the evidence supports.
+The core mathematical approach (2D Taylor expansion for gradient computation) is sound and verified. Our direct angle test does not reproduce the paper's strong spline-accuracy claim at tractable WVF settings, while the broader performance claims remain limited by compute-heavy WVF/LF evaluation and small-sample or synthetic test regimes. The major issues are still experimental fairness, runtime transparency, statistical power, and overreach in some of the source-paper conclusions.

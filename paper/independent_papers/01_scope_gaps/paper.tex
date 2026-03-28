@@ -1,0 +1,195 @@
+\documentclass[conference]{IEEEtran}
+
+\usepackage{amsmath,amssymb,amsfonts}
+\usepackage{array}
+\usepackage{booktabs}
+\usepackage{cite}
+\usepackage{graphicx}
+\usepackage{hyperref}
+
+\newcolumntype{P}[1]{>{\raggedright\arraybackslash}p{#1}}
+
+\begin{document}
+
+\title{Scope Gaps and Reproduction Boundaries in the WVF/LF Edge-Detection Papers}
+
+\author{\IEEEauthorblockN{J.\ C.\ Vaught}
+\IEEEauthorblockA{Department of Computer Science and Engineering\\
+University of South Carolina\\
+Columbia, SC, USA}}
+
+\maketitle
+
+\begin{abstract}
+This paper is an independent critique of the Wide View Filter (WVF) and Line Filter (LF) work across three source documents: the thesis, the 2024 OCEANS paper, and the 2025 multi-scale paper. The central question is not whether the method is mathematically interesting, but whether the published claims match what this repository can actually reproduce. Our answer is mixed. The rotated Taylor least-squares formulation is reproducible and mathematically coherent, and exact-threshold benchmark runs on an A100 now show that classical large-support Sobel baselines remain competitive or better on BSDS500 and UDED. However, the repository still does not reproduce several core pieces of the source papers: the BIPED benchmark is absent, the small four-image aquatic set is absent, the 2025 multi-scale GMM fusion pipeline is not implemented, and the full paper-like WVF/LF settings remain only partially explored. A direct spline-angle sweep also produces configuration-dependent results rather than the uniformly favorable behavior claimed in the later paper. The resulting critique is narrower than a blanket rejection: the method is conceptually legitimate, but the strongest empirical claims outrun the current evidence.
+\end{abstract}
+
+\begin{IEEEkeywords}
+edge detection, reproducibility, Taylor expansion, spline angle estimation, benchmark fairness
+\end{IEEEkeywords}
+
+\section{Introduction}
+
+The WVF/LF line of work proposes an orientation-aware alternative to conventional image derivatives for aquatic and low-visibility scenes. Across the thesis and the two OCEANS papers, the method evolves from a rotated two-dimensional Taylor expansion to a cubic-spline angle estimator and, finally, to a multi-scale, multi-domain pipeline with Gaussian mixture fusion~\cite{bagan2023thesis,bagan2024oceans,bagan2025oceans}. The papers are appealing because they attack a real problem: edges in water, haze, and low contrast are often broken, noisy, and difficult to threshold cleanly.
+
+This paper asks a narrower question. Which parts of that story are directly reproduced in the current repository, and which parts remain unsupported because the code, data, or evaluation protocol are incomplete? That distinction matters. A method can be mathematically sensible while still being empirically overclaimed. A benchmark can be useful while still being unfairly scoped. And a claim about superiority can be true only under a parameter regime that was never actually reproduced.
+
+The repository now contains exact-threshold A100 benchmark runs for BSDS500 and UDED, a direct spline-angle reassessment, and several WVF/LF scale sweeps. Those artifacts are enough to evaluate scope and mismatch with some confidence. They are not enough to reproduce every result in the source papers. In particular, the current tree still lacks the BIPED dataset, lacks the four-image hand-labeled aquatic set discussed in the papers, and does not implement the later multi-scale Gaussian-mixture pipeline. This paper documents those gaps explicitly rather than smoothing them over.
+
+\section{Source Papers and Claimed Scope}
+
+Table~\ref{tab:scope} summarizes the three source papers and the claims that are most relevant to the reproduction boundary. The point is not to litigate style or tone; the point is to compare what is claimed with what the repository can now verify.
+
+\begin{table*}[t]
+\centering
+\caption{Source-Paper Scope Versus What This Repository Can Verify}
+\label{tab:scope}
+\scriptsize
+\begin{tabular}{P{2.3cm}P{4.1cm}P{4.5cm}P{4.3cm}}
+\toprule
+Source paper & Main claim in the paper & What the repository now reproduces & What still does not match \\
+\midrule
+Thesis~\cite{bagan2023thesis} & WVF/LF improve gradient computation in aquatic scenes; low-SNR and angle examples motivate the method & Mathematical Taylor-expansion checks; exact BSDS/UDED baselines; direct angle sweep & Large-$N_p$ thesis settings, the small aquatic labeled set, and any real-image BIPED-style angle comparison \\
+2024 OCEANS~\cite{bagan2024oceans} & WVF/LF outperform selected ML baselines on UDED/BIPED and show useful aquatic edge maps & Exact-threshold UDED benchmark shows large-support Sobel is competitive or better; WVF/LF subset runs exist & BIPED benchmark is missing; full-resolution WVF/LF results are absent; maritime evidence remains synthetic only \\
+2025 OCEANS~\cite{bagan2025oceans} & Spline angles are more accurate than arctan; multi-scale, multi-domain GMM fusion improves edges & Direct spline-angle sweep; exact-threshold classical/ML benchmarks on A100 & Full paper-like spline settings are not uniformly favorable; multiscale GMM implementation is not present; BIPED real-image NMS comparison cannot be reproduced \\
+\bottomrule
+\end{tabular}
+\end{table*}
+
+Two external context sources are important here. First, BSDS500 is the Berkeley benchmark with 500 natural images and a 200-image test split for the standard boundary-detection setting~\cite{bsds500_official,arbelaez2011}. Second, UDED is a public aggregation benchmark used in the later WVF/LF paper, and the official repository describes it as a unified edge-detection dataset built from multiple existing edge datasets, including BIPED~\cite{uded_repo}. Those references matter because they show that the source papers were not inventing their evaluation context; they were choosing among known benchmarks. The critique is about the sufficiency of the reproduced evidence, not about the existence of the benchmarks themselves.
+
+\section{Reproduced Evidence}
+
+\subsection{Exact Benchmark Runs on A100}
+
+The strongest completed evidence in the repository is the exact-threshold A100 benchmark on BSDS500 and UDED. These runs use 1001 thresholds and a 3-pixel match radius, matching the later paper's evaluation protocol for the classical and ML baselines. The results are not favorable to a broad ``WVF/LF beats everything'' reading.
+
+\begin{table*}[t]
+\centering
+\caption{Exact-Threshold Benchmark Summary on A100}
+\label{tab:exact}
+\scriptsize
+\begin{tabular}{P{1.6cm}P{2.5cm}P{2.3cm}P{2.3cm}P{2.0cm}P{4.4cm}}
+\toprule
+Dataset & Method & ODS & OIS & AP & Interpretation \\
+\midrule
+BSDS500 & Sobel-15x15 & 0.5491 & 0.5550 & 0.4682 & Best reproduced BSDS500 method; strong large-support classical baseline \\
+BSDS500 & DexiNed & 0.4950 & 0.5058 & 0.3990 & Below Sobel-15x15 under the same exact protocol \\
+BSDS500 & TEED & 0.4710 & 0.4747 & 0.3598 & Below DexiNed and below Sobel-15x15 \\
+BSDS500 & LoG-sigma2 & 0.3826 & 0.3864 & 0.2829 & Worse than the best Sobel variants, but still a meaningful classical baseline \\
+UDED & Sobel-9x9 & 0.9039 & 0.9151 & 0.9543 & Best reproduced UDED method; large-support classical baseline remains highly competitive \\
+UDED & DexiNed & 0.9010 & 0.9102 & 0.9068 & Essentially tied with Sobel-9x9 in ODS/OIS, but not clearly better \\
+UDED & TEED & 0.8814 & 0.8958 & 0.8787 & Below both Sobel-9x9 and DexiNed \\
+UDED & LoG-sigma2 & 0.8587 & 0.8689 & 0.9073 & Still weaker than the strongest Sobel results \\
+\bottomrule
+\end{tabular}
+\end{table*}
+
+The exact-threshold results sharpen the critique in a useful way. They do not show that modern ML methods are bad; rather, they show that the source papers' implicit baseline framing was too weak to isolate the source of improvement. Once larger-support classical derivatives are included, the claimed advantage of WVF/LF over conventional edge operators becomes much less clear.
+
+\subsection{Direct Angle Reassessment}
+
+The later paper's strongest claim is about spline-based angle recovery. That claim is testable, and the repository now has a direct sweep across $N_p \in \{15,50,100,150,250\}$ and orientations $\in \{18,36,72\}$ under several noise levels. The results are mixed rather than uniformly favorable.
+
+\begin{table}[t]
+\centering
+\caption{Mean Improvement of Spline Angle Versus Sobel Arctan by Support Size}
+\label{tab:angle}
+\scriptsize
+\begin{tabular}{P{0.8cm}P{2.1cm}P{4.0cm}}
+\toprule
+$N_p$ & Mean improvement & Readout \\
+\midrule
+15  & $-4.16^\circ$ & Spline is worse on average \\
+50  & $+5.08^\circ$ & Best average regime in the current sweep \\
+100 & $+2.80^\circ$ & Improvement remains positive \\
+150 & $-0.06^\circ$ & Essentially tied, no clear advantage \\
+250 & $+1.47^\circ$ & Small positive improvement, but expensive \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+The most favorable completed row is $N_p=50$, 36 orientations, SNR 2.0, where the mean Sobel error is 12.35 degrees and the spline error is 8.11 degrees. At the other end, the $N_p=15$, 72-orientation setting is negative on average, and several intermediate settings are near tie or inconsistent across noise levels. The headline conclusion is straightforward: the spline method can help, but the current sweep does not support a blanket claim of uniform superiority. That is a materially narrower statement than the later paper's rhetoric.
+
+\section{Unreproduced Pieces}
+
+The most important gaps are not subtle. They are structural.
+
+\begin{table*}[t]
+\centering
+\caption{Main Reproduction Gaps and Their Consequences}
+\label{tab:gaps}
+\scriptsize
+\begin{tabular}{P{3.2cm}P{4.1cm}P{3.6cm}P{4.2cm}}
+\toprule
+Gap & What the source papers rely on & Local status & Why it matters \\
+\midrule
+BIPED dataset & The 2024 and 2025 papers compare against BIPED-trained or BIPED-evaluated models & `datasets/BIPED` is empty & Real BIPED tables and the BIPED NMS comparison cannot be reproduced \\
+Four-image aquatic set & The thesis and 2024 paper use a small hand-labeled aquatic set to make a qualitative claim & Not present in the repo & The most visually persuasive aquatic claims remain unverified \\
+Multi-scale GMM fusion & The 2025 paper's final method combines scales and image domains using GMM-based fusion & Not implemented & The paper's final algorithmic contribution is still missing \\
+Full paper-like WVF/LF settings & Large $N_p$ and larger LF widths are emphasized in the source papers & Only partial subset coverage exists so far & The strongest WVF/LF claims remain only partially tested \\
+Real maritime images & The motivation is maritime and low-visibility imagery & The current maritime folder has zero-byte placeholders & Current maritime evidence is synthetic only \\
+\bottomrule
+\end{tabular}
+\end{table*}
+
+The source papers repeatedly push beyond the subset of evidence that the repository can currently match. The thesis relies on a small low-SNR aquatic example and larger WVF/LF parameter settings. The 2024 paper uses UDED and BIPED as numerical support, but only UDED is available here and even there the current WVF/LF runs remain subset-limited. The 2025 paper goes further by adding spline-angle evidence, a real-image BIPED NMS comparison, and a multi-scale Gaussian mixture fusion story. That final pipeline is not in the repository at all.
+
+This is why the critique must be scope-based rather than rhetorical. The repository can verify some claims exactly, approximate others, and not touch the remainder. The distinction between those categories is the paper's real contribution.
+
+\section{Why The Mismatch Matters}
+
+The mismatch is not simply that some experiments are missing. It is that the missing experiments are exactly the ones needed to support the strongest claims.
+
+First, the benchmark story is sensitive to support size. When the exact A100 runs include larger-support Sobel baselines, the ``WVF/LF versus classical filters'' comparison becomes much less dramatic. On BSDS500, Sobel-15x15 beats DexiNed and TEED under the same 1001-threshold protocol. On UDED, Sobel-9x9 is slightly ahead of DexiNed and clearly ahead of TEED. That makes it impossible to interpret the source papers as having shown a universal deep-learning defeat.
+
+Second, the angle story is configuration-dependent. The direct sweep is not a failure of the spline idea, but it is a failure of the stronger claim that spline angles are simply and consistently better. The current data support a narrower reading: some larger-support configurations improve angular accuracy, while others do not. The paper should say that explicitly.
+
+Third, runtime matters. WVF and LF remain CPU NumPy/SciPy code in the repository, and their current implementation is serial inside each image. The repository did add task-level parallelization across CPU cores for the parameter sweeps, but that does not change the basic fact that each WVF/LF evaluation is expensive. In other words, the code now uses more cores, but the algorithm is still the algorithm.
+
+Fourth, missing data changes the burden of proof. Without BIPED and without the four-image aquatic set, the strongest visual and numerical claims remain out of reach. Without the multi-scale GMM implementation, the 2025 paper's main systems contribution is only partially represented. A critique that ignores those absences would be too easy on the source papers; a critique that pretends the repository reproduced them would be inaccurate.
+
+\section{Limitations}
+
+This paper is intentionally strict, but it is not complete.
+
+The WVF/LF scale sweeps toward the large-$N_p$ settings emphasized in the source papers are still incomplete in the repository and should be treated cautiously. The maritime evidence is synthetic because the local maritime image folder currently contains zero-byte placeholders. The exact benchmark runs now close the gap for the classical and ML baselines on BSDS500 and UDED, but they do not automatically validate the WVF/LF family at the full paper settings. Finally, this critique does not attempt to reconstruct the full multi-scale GMM pipeline from scratch; it only records that its absence is a real reproduction gap.
+
+\section{Conclusion}
+
+The central conclusion is narrower than the source papers' rhetoric but stronger than a vague dismissal. The WVF/LF line of work contains a mathematically sound core, and the repository now reproduces that core well enough to take the method seriously. However, the empirical package surrounding that core is not yet fully supported. Exact benchmark runs on BSDS500 and UDED show that large-support Sobel baselines remain highly competitive. The spline-angle sweep shows configuration-dependent gains rather than uniform dominance. And the most distinctive parts of the later paper - BIPED comparisons, the four-image aquatic set, and the multi-scale GMM fusion pipeline - remain unreproduced.
+
+That is the right boundary for the current evidence. The method is interesting, but the strongest claims should be rewritten as narrower, conditional statements until the missing data and missing algorithmic pieces are actually reproduced.
+
+\begin{thebibliography}{99}
+
+\bibitem{bagan2023thesis}
+L.~Bagan, ``Wide view and line filter for enhanced image gradient computation and edge determination,'' M.S.\ thesis, Univ.\ of South Carolina, 2023.
+
+\bibitem{bagan2024oceans}
+L.~Bagan and Y.~Wang, ``Wide view and line filter for enhanced gradient computation in aquatic environment,'' in \textit{Proc.\ IEEE OCEANS}, 2024.
+
+\bibitem{bagan2025oceans}
+L.~Bagan and Y.~Wang, ``Wide view and line filter for enhanced gradient computation in aquatic environment,'' in \textit{Proc.\ IEEE OCEANS}, 2025.
+
+\bibitem{bsds500_official}
+P.~Arbel\'{a}ez, M.~Maire, C.~Fowlkes, and J.~Malik, ``The Berkeley Segmentation Dataset and Benchmark,'' UC Berkeley Vision Group, BSDS500 resources and benchmark page. Available: \url{https://www2.eecs.berkeley.edu/Research/Projects/CS/vision/grouping/segbench/}
+
+\bibitem{arbelaez2011}
+P.~Arbel\'{a}ez, M.~Maire, C.~Fowlkes, and J.~Malik, ``Contour detection and hierarchical image segmentation,'' \textit{IEEE Trans.\ Pattern Anal.\ Mach.\ Intell.}, vol.~33, no.~5, pp.~898--916, 2011.
+
+\bibitem{uded_repo}
+X.~Soria, Y.~Li, M.~Rouhani, and A.~D.~Sappa, ``UDED: Unified dataset for edge detection,'' GitHub repository. Available: \url{https://github.com/xavysp/UDED}
+
+\bibitem{dexined_wacv2020}
+X.~Soria Poma, E.~Riba, and A.~Sappa, ``Dense extreme inception network: Towards a robust CNN model for edge detection,'' in \textit{Proc.\ IEEE/CVF WACV}, 2020, pp.~1923--1932.
+
+\bibitem{teed_iccvw2023}
+X.~Soria, Y.~Li, M.~Rouhani, and A.~D.~Sappa, ``Tiny and efficient model for the edge detection generalization,'' in \textit{Proc.\ IEEE/CVF ICCV Workshops}, 2023, pp.~1364--1373.
+
+\bibitem{canny1986}
+J.~Canny, ``A computational approach to edge detection,'' \textit{IEEE Trans.\ Pattern Anal.\ Mach.\ Intell.}, vol.~8, no.~6, pp.~679--698, 1986.
+
+\end{thebibliography}
+
+\end{document}

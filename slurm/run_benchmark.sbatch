@@ -16,8 +16,15 @@ module load cuda/12.1
 # Disable user site-packages to avoid numpy version conflicts with system libs
 export PYTHONNOUSERSITE=1
 
-# Use isolated package dir for kornia/opencv (no-deps to avoid torch conflict)
-if [ ! -d "$HOME/.bench_pkgs/kornia" ]; then
+# Use isolated package dir for optional deps (no-deps to avoid torch conflict)
+mkdir -p $HOME/.bench_pkgs
+if ! python - <<'PY' >/dev/null 2>&1
+import importlib.util
+import os
+spec = importlib.util.find_spec("cv2")
+raise SystemExit(0 if spec else 1)
+PY
+then
     pip install --target=$HOME/.bench_pkgs --no-deps kornia kornia_rs opencv-python-headless 2>&1 | tail -3
 fi
 export PYTHONPATH=$HOME/.bench_pkgs:$PYTHONPATH
@@ -35,8 +42,12 @@ nvidia-smi --query-gpu=name,memory.total --format=csv,noheader
 
 # Run with 50 images initially (set BENCH_MAX_IMAGES for full)
 export BENCH_MAX_IMAGES=${BENCH_MAX_IMAGES:-50}
+export WVF_MAX_IMAGES=${WVF_MAX_IMAGES:-10}
+export LF_MAX_IMAGES=${LF_MAX_IMAGES:-5}
+export UDED_WVF_MAX_IMAGES=${UDED_WVF_MAX_IMAGES:-5}
+export UDED_LF_MAX_IMAGES=${UDED_LF_MAX_IMAGES:-3}
 
-python benchmarks/benchmark_all.py
+python -u benchmarks/benchmark_all.py
 
 echo "Completed at $(date)"
 echo "Results:"

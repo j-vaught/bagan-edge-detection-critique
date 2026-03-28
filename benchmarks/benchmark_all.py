@@ -13,9 +13,13 @@ import sys
 import os
 import time
 import json
+import socket
+import platform
+import re
+from collections import defaultdict
+from concurrent.futures import ProcessPoolExecutor, as_completed
 import numpy as np
 from pathlib import Path
-from collections import defaultdict
 
 import matplotlib
 matplotlib.use('Agg')
@@ -34,6 +38,114 @@ import torch
 import torch.nn.functional as F
 from scipy import ndimage, io as sio
 from skimage import io as skio
+
+
+def env_flag(name, default=False):
+    """Parse a boolean environment variable."""
+    raw = os.environ.get(name)
+    if raw is None:
+        return default
+    return raw.strip().lower() in {"1", "true", "yes", "on"}
+
+
+def parse_resize_shape(value):
+    """Parse WIDTHxHEIGHT style resize strings from the environment."""
+    raw = (value or "64x64").strip().lower().replace(" ", "")
+    if "x" not in raw:
+        raise ValueError(f"Invalid resize shape {value!r}; expected HxW")
+    h_str, w_str = raw.split("x", 1)
+    return int(h_str), int(w_str)
+
+
+def normalize_output_tag(value):
+    """Normalize output tags so benchmark campaigns do not overwrite each other."""
+    if not value:
+        return ""
+    value = value.strip()
+    return value if value.startswith("_") else f"_{value}"
+
+
+def parse_dataset_list(value):
+    """Parse dataset lists using comma, colon, or semicolon separators."""
+    raw = (value or "BSDS500,UDED").strip()
+    return {
+        item.strip().upper()
+        for item in re.split(r"[,;:]+", raw)
+        if item.strip()
+    }
+
+
+def resolve_worker_count(env_name, task_count):
+    """Resolve a bounded process count from environment or SLURM metadata."""
+    raw = (
+        os.environ.get(env_name)
+        or os.environ.get("SLURM_CPUS_PER_TASK")
+        or os.environ.get("OMP_NUM_THREADS")
+        or str(os.cpu_count() or 1)
+    )
+    try:
+        workers = int(raw)
+    except ValueError:
+        workers = os.cpu_count() or 1
+    return max(1, min(workers, task_count))
+
+
+def run_wvf_lf_task(task):
+    """Run a single WVF or LF image task in a worker process."""
+    from wvf_lf import lf_image, wvf_image
+
+    image = task["image"]
+    start = time.perf_counter()
+
+    if task["method"] == "WVF":
+        mag, _, _ = wvf_image(
+            image,
+            np_count=task["np_count"],
+            order=task["order"],
+            n_orientations=task["n_orientations"],
+        )
+    else:
+        mag, _, _ = lf_image(
+            image,
+            half_width=task["half_width"],
+            np_count=task["np_count"],
+            order=task["order"],
+            n_orientations=task["n_orientations"],
+            subsample=task["lf_subsample"],
+        )
+
+    elapsed = time.perf_counter() - start
+    if mag.max() > 0:
+        mag = mag / mag.max()
+
+    return {
+        "config_name": task["config_name"],
+        "image_idx": task["image_idx"],
+        "mag": mag,
+        "elapsed_s": elapsed,
+    }
+
+
+def collect_runtime_metadata():
+    """Capture the execution environment for provenance in reports."""
+    metadata = {
+        "hostname": socket.gethostname(),
+        "python_version": platform.python_version(),
+        "platform": platform.platform(),
+        "numpy_version": np.__version__,
+        "torch_version": torch.__version__,
+        "cuda_available": bool(torch.cuda.is_available()),
+        "cuda_device_count": int(torch.cuda.device_count()) if torch.cuda.is_available() else 0,
+        "benchmark_note": (
+            "Traditional filters and WVF/LF run in NumPy/SciPy on CPU. "
+            "ML models use PyTorch and only run on GPU when torch.cuda.is_available() is true."
+        ),
+    }
+    if torch.cuda.is_available():
+        metadata["cuda_devices"] = [torch.cuda.get_device_name(i) for i in range(torch.cuda.device_count())]
+    else:
+        metadata["cuda_devices"] = []
+    return metadata
 
 # ============================================================
 # Dataset Loaders
@@ -436,7 +548,7 @@ def compute_metrics(pred, gt, n_thresholds=100, match_radius=3):
 # Benchmark Runner
 # ============================================================
 
-def benchmark_traditional(images, ground_truths, names):
+def benchmark_traditional(images, ground_truths, names, n_thresholds=100, match_radius=3):
     """Benchmark all traditional methods."""
     results = {}
 
@@ -466,7 +578,8 @@ def benchmark_traditional(images, ground_truths, names):
             preds.append(pred)
 
         avg_time = total_time / len(images)
-        ods, ois, ap = compute_metrics(preds, ground_truths)
+        ods, ois, ap = compute_metrics(preds, ground_truths, n_thresholds=n_thresholds,
+                                       match_radius=match_radius)
         results[method_name] = {
             'ODS': ods, 'OIS': ois, 'AP': ap,
             'avg_time_s': avg_time, 'type': 'traditional'
@@ -477,50 +590,109 @@ def benchmark_traditional(images, ground_truths, names):
     return results
 
 
-def benchmark_wvf(images, ground_truths, names, max_images=20):
-    """Benchmark WVF/LF (limited images due to speed)."""
-    from wvf_lf import wvf_image, lf_image
+def benchmark_wvf_lf(images, ground_truths, names, dataset_name,
+                     resize_shape=(64, 64), wvf_max_images=10, lf_max_images=5,
+                     wvf_np_count=15, lf_half_width=3, order=4, n_orientations=18,
+                     lf_subsample=2, n_thresholds=100, match_radius=3):
+    """Benchmark tractable WVF/LF subsets with explicit notes."""
+    from skimage.transform import resize
 
     results = {}
-    subset = min(max_images, len(images))
-    print(f"  Running WVF/LF on {subset}/{len(images)} images (slow method)...")
+    resize_label = f"{resize_shape[0]}x{resize_shape[1]}"
 
-    for method_name, method_fn in [
-        ('WVF-Np15', lambda img: wvf_image(to_gray(img), np_count=15, order=4, n_orientations=18)),
-    ]:
-        preds = []
-        total_time = 0
-        for i in range(subset):
-            # Resize to small for tractability
-            from skimage.transform import resize
-            small = resize(to_gray(images[i]), (64, 64), anti_aliasing=True) * 255
-            gt_small = resize(ground_truths[i], (64, 64), anti_aliasing=True)
+    configs = [
+        (
+            f'WVF-Np{wvf_np_count}',
+            min(wvf_max_images, len(images)),
+            f'{dataset_name} subset, Np={wvf_np_count}, {n_orientations} orientations, '
+            f'resized to {resize_label}',
+        ),
+        (
+            f'LF-m{lf_half_width}-Np{wvf_np_count}',
+            min(lf_max_images, len(images)),
+            f'{dataset_name} subset, m={lf_half_width}, Np={wvf_np_count}, {n_orientations} '
+            f'orientations, subsample={lf_subsample}, resized to {resize_label}',
+        ),
+    ]
 
-            start = time.perf_counter()
-            mag, _, _ = method_fn(small)
-            total_time += time.perf_counter() - start
+    small_images = []
+    gt_resized = []
+    max_subset = max((subset for _, subset, _ in configs), default=0)
+    for i in range(max_subset):
+        small_images.append(
+            resize(to_gray(images[i]), resize_shape, anti_aliasing=True, preserve_range=True).astype(np.float64)
+        )
+        gt_resized.append(
+            resize(ground_truths[i], resize_shape, anti_aliasing=True, preserve_range=True)
+        )
 
-            if mag.max() > 0:
-                mag = mag / mag.max()
-            preds.append(mag)
+    tasks = []
+    for method_name, subset, note in configs:
+        if subset == 0:
+            continue
+        print(f"  Running {method_name} on {subset}/{len(images)} images...")
+        for image_idx in range(subset):
+            task = {
+                "config_name": method_name,
+                "method": "WVF" if method_name.startswith("WVF-") else "LF",
+                "image_idx": image_idx,
+                "image": small_images[image_idx],
+                "np_count": wvf_np_count,
+                "half_width": lf_half_width,
+                "order": order,
+                "n_orientations": n_orientations,
+                "lf_subsample": lf_subsample,
+            }
+            tasks.append(task)
 
+    workers = resolve_worker_count("WVF_PARALLEL_WORKERS", len(tasks))
+    print(f"  Using {workers} worker processes for WVF/LF tasks")
+
+    grouped = defaultdict(list)
+    completed = 0
+    with ProcessPoolExecutor(max_workers=workers) as executor:
+        futures = [executor.submit(run_wvf_lf_task, task) for task in tasks]
+        for future in as_completed(futures):
+            result = future.result()
+            grouped[result["config_name"]].append(result)
+            completed += 1
+            if completed % max(1, min(10, len(tasks))) == 0 or completed == len(tasks):
+                print(f"    Completed {completed}/{len(tasks)} WVF/LF tasks")
+
+    config_meta = {name: (subset, note) for name, subset, note in configs}
+    for method_name, subset, _ in configs:
+        if subset == 0:
+            continue
+        ordered = sorted(grouped[method_name], key=lambda item: item["image_idx"])
+        preds = [item["mag"] for item in ordered]
+        gt_subset = gt_resized[:subset]
+        total_time = sum(item["elapsed_s"] for item in ordered)
         avg_time = total_time / subset
-        gt_resized = [resize(ground_truths[i], (64, 64), anti_aliasing=True) for i in range(subset)]
-        ods, ois, ap = compute_metrics(preds, gt_resized)
+        ods, ois, ap = compute_metrics(preds, gt_subset, n_thresholds=n_thresholds,
+                                       match_radius=match_radius)
+        note = config_meta[method_name][1]
         results[method_name] = {
-            'ODS': ods, 'OIS': ois, 'AP': ap,
-            'avg_time_s': avg_time, 'type': 'wvf_lf',
-            'note': f'{subset} images, resized to 64x64'
+            'ODS': ods,
+            'OIS': ois,
+            'AP': ap,
+            'avg_time_s': avg_time,
+            'type': 'wvf_lf',
+            'note': note,
+            'n_images': subset,
         }
-        print(f"    ODS={ods:.4f}  OIS={ois:.4f}  AP={ap:.4f}  "
-              f"time={avg_time:.1f}s/img")
+        print(
+            f"    ODS={ods:.4f}  OIS={ois:.4f}  AP={ap:.4f}  "
+            f"time={avg_time:.1f}s/img"
+        )
 
     return results
 
 
-def benchmark_ml_model(model_name, load_fn, run_fn, images, ground_truths):
+def benchmark_ml_model(model_name, load_fn, run_fn, images, ground_truths,
+                       n_thresholds=100, match_radius=3):
     """Benchmark a single ML model."""
     print(f"  Loading {model_name}...")
+    device_label = 'cuda' if torch.cuda.is_available() else 'cpu'
     try:
         model = load_fn()
         if model is None:
@@ -564,12 +736,14 @@ def benchmark_ml_model(model_name, load_fn, run_fn, images, ground_truths):
         return None
 
     avg_time = total_time / n_success
-    ods, ois, ap = compute_metrics(preds, ground_truths[:n_success])
+    ods, ois, ap = compute_metrics(preds, ground_truths[:n_success],
+                                   n_thresholds=n_thresholds, match_radius=match_radius)
 
     result = {
         'ODS': ods, 'OIS': ois, 'AP': ap,
         'avg_time_s': avg_time, 'type': 'ml',
-        'n_images': n_success
+        'n_images': n_success,
+        'note': f'PyTorch inference on {device_label}',
     }
     print(f"    ODS={ods:.4f}  OIS={ois:.4f}  AP={ap:.4f}  "
           f"time={avg_time*1000:.1f}ms/img  ({n_success} images)")
@@ -582,7 +756,7 @@ def benchmark_ml_model(model_name, load_fn, run_fn, images, ground_truths):
     return result
 
 
-def benchmark_ml_models(images, ground_truths, names):
+def benchmark_ml_models(images, ground_truths, names, n_thresholds=100, match_radius=3):
     """Benchmark all ML models."""
     results = {}
 
@@ -594,7 +768,8 @@ def benchmark_ml_models(images, ground_truths, names):
 
     for model_name, load_fn, run_fn in ml_models:
         result = benchmark_ml_model(model_name, load_fn, run_fn,
-                                     images, ground_truths)
+                                     images, ground_truths,
+                                     n_thresholds=n_thresholds, match_radius=match_radius)
         if result is not None:
             results[model_name] = result
 
@@ -605,7 +780,7 @@ def benchmark_ml_models(images, ground_truths, names):
 # Visualization
 # ============================================================
 
-def plot_results(all_results, dataset_name):
+def plot_results(all_results, dataset_name, output_tag=""):
     """Generate comparison plots."""
     methods = []
     ods_scores = []
@@ -637,7 +812,7 @@ def plot_results(all_results, dataset_name):
     ax.set_ylim(0, 1)
     ax.grid(True, alpha=0.3, axis='y')
     fig.tight_layout()
-    fig.savefig(RESULTS_DIR / f'{dataset_name}_ods_ois.png', dpi=150)
+    fig.savefig(RESULTS_DIR / f'{dataset_name}{output_tag}_ods_ois.png', dpi=150)
     plt.close(fig)
 
     # Runtime comparison (log scale)
@@ -648,14 +823,25 @@ def plot_results(all_results, dataset_name):
     ax.set_xscale('log')
     ax.grid(True, alpha=0.3, axis='x')
     fig.tight_layout()
-    fig.savefig(RESULTS_DIR / f'{dataset_name}_runtime.png', dpi=150)
+    fig.savefig(RESULTS_DIR / f'{dataset_name}{output_tag}_runtime.png', dpi=150)
     plt.close(fig)
 
     print(f"  Plots saved to {RESULTS_DIR}/")
 
 
-def generate_report(all_results, dataset_name):
-    """Generate markdown results table."""
+def serialize_results_dict(results):
+    """Convert numpy scalars to plain Python types for JSON export."""
+    serializable = {}
+    for key, value in results.items():
+        serializable[key] = {
+            inner_key: float(inner_val) if isinstance(inner_val, (np.floating, float)) else inner_val
+            for inner_key, inner_val in value.items()
+        }
+    return serializable
+
+
+def generate_report(all_results, dataset_name, meta):
+    """Generate markdown results table with provenance."""
     lines = [f"# Benchmark Results: {dataset_name}\n"]
     lines.append("| Method | Type | ODS | OIS | AP | Time (ms/img) |")
     lines.append("|--------|------|----:|----:|---:|--------------:|")
@@ -672,6 +858,21 @@ def generate_report(all_results, dataset_name):
             lines[-1] += f" *{note}*"
 
     lines.append("")
+    lines.append("## Provenance\n")
+    lines.append(f"- Images available: {meta['images_available']}")
+    lines.append(f"- Images evaluated in this report: {meta['images_used']}")
+    lines.append(
+        f"- Evaluation: {meta['n_thresholds']} thresholds, {meta['match_radius']}-pixel match radius"
+    )
+    lines.append(
+        f"- Runtime environment: Python {meta['runtime']['python_version']}, "
+        f"NumPy {meta['runtime']['numpy_version']}, "
+        f"PyTorch {meta['runtime']['torch_version']}, "
+        f"CUDA available = {meta['runtime']['cuda_available']}"
+    )
+    lines.append(f"- Host: {meta['runtime']['hostname']}")
+    lines.append(f"- Note: {meta['runtime']['benchmark_note']}")
+    lines.append("")
     return "\n".join(lines)
 
 
@@ -685,77 +886,138 @@ def main():
     print("Traditional Filters vs WVF/LF vs ML Models")
     print("=" * 70)
 
-    # Load BSDS500
-    print("\n[1/5] Loading datasets...")
-    bsds_images, bsds_gt, bsds_names = load_bsds500_test()
+    runtime_meta = collect_runtime_metadata()
 
-    # Limit to manageable subset for initial run
+    output_tag = normalize_output_tag(os.environ.get('BENCH_OUTPUT_TAG', ''))
+    n_thresholds = int(os.environ.get('BENCH_N_THRESHOLDS', 100))
+    match_radius = int(os.environ.get('BENCH_MATCH_RADIUS', 3))
     max_images = int(os.environ.get('BENCH_MAX_IMAGES', 50))
-    if len(bsds_images) > max_images:
-        print(f"  Using subset of {max_images}/{len(bsds_images)} images")
-        bsds_images = bsds_images[:max_images]
-        bsds_gt = bsds_gt[:max_images]
-        bsds_names = bsds_names[:max_images]
+    wvf_resize_shape = parse_resize_shape(os.environ.get('WVF_RESIZE_SHAPE', '64x64'))
+    wvf_max_images = int(os.environ.get('WVF_MAX_IMAGES', 10))
+    lf_max_images = int(os.environ.get('LF_MAX_IMAGES', 5))
+    wvf_np_count = int(os.environ.get('WVF_NP_COUNT', 15))
+    lf_half_width = int(os.environ.get('LF_HALF_WIDTH', 3))
+    wvf_order = int(os.environ.get('WVF_ORDER', 4))
+    wvf_n_orientations = int(os.environ.get('WVF_N_ORIENTATIONS', 18))
+    lf_subsample = int(os.environ.get('LF_SUBSAMPLE', 2))
+    run_traditional = env_flag('RUN_TRADITIONAL', True)
+    run_wvf_lf = env_flag('RUN_WVF_LF', True)
+    run_ml = env_flag('RUN_ML', True)
+    datasets_to_run = parse_dataset_list(os.environ.get('BENCH_DATASETS', 'BSDS500,UDED'))
 
-    all_results = {}
+    print("\n[1/5] Configuration...")
+    print(f"  Datasets: {sorted(datasets_to_run)}")
+    print(f"  Thresholds: {n_thresholds}")
+    print(f"  Match radius: {match_radius}")
+    print(
+        "  WVF/LF params: "
+        f"Np={wvf_np_count}, m={lf_half_width}, order={wvf_order}, "
+        f"orientations={wvf_n_orientations}, resize={wvf_resize_shape}, "
+        f"lf_subsample={lf_subsample}"
+    )
+    print(
+        "  Sections enabled: "
+        f"traditional={run_traditional}, wvf_lf={run_wvf_lf}, ml={run_ml}"
+    )
 
-    # Traditional methods
-    print("\n[2/5] Benchmarking traditional filters...")
-    trad_results = benchmark_traditional(bsds_images, bsds_gt, bsds_names)
-    all_results.update(trad_results)
+    def run_dataset(dataset_key, images, ground_truths, names,
+                    results_json_name, results_report_name):
+        if len(images) == 0:
+            print(f"  {dataset_key}: no images loaded, skipping")
+            return
 
-    # WVF/LF
-    print("\n[3/5] Benchmarking WVF/LF...")
-    wvf_results = benchmark_wvf(bsds_images, bsds_gt, bsds_names, max_images=10)
-    all_results.update(wvf_results)
+        available = len(images)
+        if len(images) > max_images:
+            print(f"  Using subset of {max_images}/{len(images)} images for {dataset_key}")
+            images = images[:max_images]
+            ground_truths = ground_truths[:max_images]
+            names = names[:max_images]
 
-    # ML models
-    print("\n[4/5] Benchmarking ML models...")
-    ml_results = benchmark_ml_models(bsds_images, bsds_gt, bsds_names)
-    all_results.update(ml_results)
+        all_results = {}
 
-    # Generate outputs
-    print("\n[5/5] Generating report and plots...")
-    report = generate_report(all_results, "BSDS500")
-    print(report)
+        dataset_prefix = dataset_key.upper()
+        dataset_wvf_max = int(
+            os.environ.get(
+                f'{dataset_prefix}_WVF_MAX_IMAGES',
+                os.environ.get('WVF_MAX_IMAGES', wvf_max_images),
+            )
+        )
+        dataset_lf_max = int(
+            os.environ.get(
+                f'{dataset_prefix}_LF_MAX_IMAGES',
+                os.environ.get('LF_MAX_IMAGES', lf_max_images),
+            )
+        )
 
-    plot_results(all_results, "BSDS500")
+        if run_traditional:
+            print("  Traditional filters...")
+            all_results.update(
+                benchmark_traditional(images, ground_truths, names,
+                                      n_thresholds=n_thresholds, match_radius=match_radius)
+            )
+        if run_wvf_lf:
+            print("  WVF/LF subsets...")
+            all_results.update(
+                benchmark_wvf_lf(
+                    images, ground_truths, names, dataset_name=dataset_key,
+                    resize_shape=wvf_resize_shape,
+                    wvf_max_images=dataset_wvf_max,
+                    lf_max_images=dataset_lf_max,
+                    wvf_np_count=wvf_np_count,
+                    lf_half_width=lf_half_width,
+                    order=wvf_order,
+                    n_orientations=wvf_n_orientations,
+                    lf_subsample=lf_subsample,
+                    n_thresholds=n_thresholds,
+                    match_radius=match_radius,
+                )
+            )
+        if run_ml:
+            print("  ML models...")
+            all_results.update(
+                benchmark_ml_models(images, ground_truths, names,
+                                    n_thresholds=n_thresholds, match_radius=match_radius)
+            )
 
-    # Save raw results
-    serializable = {}
-    for k, v in all_results.items():
-        serializable[k] = {kk: float(vv) if isinstance(vv, (np.floating, float)) else vv
-                           for kk, vv in v.items()}
-    with open(RESULTS_DIR / 'benchmark_results.json', 'w') as f:
-        json.dump(serializable, f, indent=2)
+        meta = {
+            "dataset": dataset_key,
+            "images_available": available,
+            "images_used": len(images),
+            "n_thresholds": n_thresholds,
+            "match_radius": match_radius,
+            "runtime": runtime_meta,
+        }
+        report = generate_report(all_results, dataset_key, meta)
+        print(report)
+        plot_results(all_results, dataset_key, output_tag=output_tag)
 
-    # Save report
-    report_path = RESULTS_DIR / 'benchmark_report.md'
-    with open(report_path, 'w') as f:
-        f.write(report)
-    print(f"\nResults saved to {RESULTS_DIR}/")
+        with open(RESULTS_DIR / results_json_name, 'w') as f:
+            json.dump({"meta": meta, "results": serialize_results_dict(all_results)}, f, indent=2)
+        with open(RESULTS_DIR / results_report_name, 'w') as f:
+            f.write(report)
+        print(f"\nResults saved to {RESULTS_DIR}/")
 
-    # Also try UDED
-    print("\n" + "=" * 70)
-    print("UDED BENCHMARK")
-    print("=" * 70)
-    uded_images, uded_gt, uded_names = load_uded_test()
-    if uded_images:
-        uded_max = min(max_images, len(uded_images))
-        uded_images = uded_images[:uded_max]
-        uded_gt = uded_gt[:uded_max]
-        uded_names = uded_names[:uded_max]
+    print("\n[2/5] Loading datasets...")
+    if "BSDS500" in datasets_to_run:
+        bsds_images, bsds_gt, bsds_names = load_bsds500_test()
+        print("\n[3/5] BSDS500 BENCHMARK")
+        print("=" * 70)
+        run_dataset(
+            "BSDS500", bsds_images, bsds_gt, bsds_names,
+            f'benchmark_results{output_tag}.json',
+            f'benchmark_report{output_tag}.md',
+        )
 
-        uded_results = {}
-        print("  Traditional filters...")
-        uded_results.update(benchmark_traditional(uded_images, uded_gt, uded_names))
-        print("  ML models...")
-        uded_results.update(benchmark_ml_models(uded_images, uded_gt, uded_names))
-
-        uded_report = generate_report(uded_results, "UDED")
-        print(uded_report)
-        with open(RESULTS_DIR / 'benchmark_uded_report.md', 'w') as f:
-            f.write(uded_report)
+    if "UDED" in datasets_to_run:
+        print("\n" + "=" * 70)
+        print("UDED BENCHMARK")
+        print("=" * 70)
+        uded_images, uded_gt, uded_names = load_uded_test()
+        run_dataset(
+            "UDED", uded_images, uded_gt, uded_names,
+            f'benchmark_uded_results{output_tag}.json',
+            f'benchmark_uded_report{output_tag}.md',
+        )
 
 
 if __name__ == "__main__":

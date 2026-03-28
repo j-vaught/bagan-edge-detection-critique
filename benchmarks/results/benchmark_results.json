@@ -1,89 +1,121 @@
 {
-  "Sobel-3x3": {
-    "ODS": 0.4492635018754772,
-    "OIS": 0.4576326020868371,
-    "AP": 0.358068761931697,
-    "avg_time_s": 0.013816330507397652,
-    "type": "traditional"
+  "meta": {
+    "dataset": "BSDS500",
+    "images_available": 200,
+    "images_used": 50,
+    "n_thresholds": 100,
+    "match_radius": 3,
+    "runtime": {
+      "hostname": "node031",
+      "python_version": "3.12.4",
+      "platform": "Linux-5.14.0-362.8.1.el9_3.x86_64-x86_64-with-glibc2.34",
+      "numpy_version": "1.26.4",
+      "torch_version": "2.3.1+cu121",
+      "cuda_available": false,
+      "cuda_device_count": 0,
+      "benchmark_note": "Traditional filters and WVF/LF run in NumPy/SciPy on CPU. ML models use PyTorch and only run on GPU when torch.cuda.is_available() is true.",
+      "cuda_devices": []
+    }
   },
-  "Sobel-5x5": {
-    "ODS": 0.4640618176642668,
-    "OIS": 0.46679614067594577,
-    "AP": 0.3784290345298925,
-    "avg_time_s": 0.013463458120822907,
-    "type": "traditional"
-  },
-  "Sobel-7x7": {
-    "ODS": 0.4926136266773285,
-    "OIS": 0.4990120169868383,
-    "AP": 0.41319021995014055,
-    "avg_time_s": 0.007795341033488512,
-    "type": "traditional"
-  },
-  "Sobel-9x9": {
-    "ODS": 0.515925672030498,
-    "OIS": 0.5237514536250641,
-    "AP": 0.43921927276285044,
-    "avg_time_s": 0.008941095471382141,
-    "type": "traditional"
-  },
-  "Sobel-15x15": {
-    "ODS": 0.5488525323009315,
-    "OIS": 0.5538997102592539,
-    "AP": 0.4678599389960168,
-    "avg_time_s": 0.011904351990669965,
-    "type": "traditional"
-  },
-  "Prewitt-3x3": {
-    "ODS": 0.45286091093000214,
-    "OIS": 0.4599950665669881,
-    "AP": 0.35870175084862355,
-    "avg_time_s": 0.010759144853800535,
-    "type": "traditional"
-  },
-  "Canny-sigma1": {
-    "ODS": 0.20123237021189902,
-    "OIS": 0.19394260210851538,
-    "AP": 0.055622716500392896,
-    "avg_time_s": 0.017075509876012803,
-    "type": "traditional"
-  },
-  "Canny-sigma2": {
-    "ODS": 0.30336539653165145,
-    "OIS": 0.28978288589257967,
-    "AP": 0.08617811472805482,
-    "avg_time_s": 0.021406282149255277,
-    "type": "traditional"
-  },
-  "LoG-sigma2": {
-    "ODS": 0.3821539214863236,
-    "OIS": 0.3849642767231303,
-    "AP": 0.2828528606684976,
-    "avg_time_s": 0.22521020747721196,
-    "type": "traditional"
-  },
-  "WVF-Np15": {
-    "ODS": 0.0,
-    "OIS": 0.0,
-    "AP": 0.0,
-    "avg_time_s": 9.056690105050802,
-    "type": "wvf_lf",
-    "note": "10 images, resized to 64x64"
-  },
-  "TEED": {
-    "ODS": 0.47011941739921465,
-    "OIS": 0.47138358966600946,
-    "AP": 0.33308101799602063,
-    "avg_time_s": 0.07404340418055654,
-    "type": "ml",
-    "n_images": 50
-  },
-  "DexiNed": {
-    "ODS": 0.4950448624963871,
-    "OIS": 0.5040910913216878,
-    "AP": 0.39581009366850783,
-    "avg_time_s": 0.3404686210118234,
-    "type": "ml",
-    "n_images": 50
+  "results": {
+    "Sobel-3x3": {
+      "ODS": 0.4492635018754772,
+      "OIS": 0.4576326020868371,
+      "AP": 0.358068761931697,
+      "avg_time_s": 0.01384107096120715,
+      "type": "traditional"
+    },
+    "Sobel-5x5": {
+      "ODS": 0.4640618176642668,
+      "OIS": 0.46679614067594577,
+      "AP": 0.3784290345298925,
+      "avg_time_s": 0.011314431093633176,
+      "type": "traditional"
+    },
+    "Sobel-7x7": {
+      "ODS": 0.4926136266773285,
+      "OIS": 0.4990120169868383,
+      "AP": 0.41319021995014055,
+      "avg_time_s": 0.010843941736966371,
+      "type": "traditional"
+    },
+    "Sobel-9x9": {
+      "ODS": 0.515925672030498,
+      "OIS": 0.5237514536250641,
+      "AP": 0.43921927276285044,
+      "avg_time_s": 0.007679513823240995,
+      "type": "traditional"
+    },
+    "Sobel-15x15": {
+      "ODS": 0.5488525323009315,
+      "OIS": 0.5538997102592539,
+      "AP": 0.4678599389960168,
+      "avg_time_s": 0.01905315022915602,
+      "type": "traditional"
+    },
+    "Prewitt-3x3": {
+      "ODS": 0.45286091093000214,
+      "OIS": 0.4599950665669881,
+      "AP": 0.35870175084862355,
+      "avg_time_s": 0.008322625700384379,
+      "type": "traditional"
+    },
+    "Canny-sigma1": {
+      "ODS": 0.20123237021189902,
+      "OIS": 0.19394260210851538,
+      "AP": 0.055622716500392896,
+      "avg_time_s": 0.032231610622257,
+      "type": "traditional"
+    },
+    "Canny-sigma2": {
+      "ODS": 0.30336539653165145,
+      "OIS": 0.28978288589257967,
+      "AP": 0.08617811472805482,
+      "avg_time_s": 0.014437282383441925,
+      "type": "traditional"
+    },
+    "LoG-sigma2": {
+      "ODS": 0.3821539214863236,
+      "OIS": 0.3849642767231303,
+      "AP": 0.2828528606684976,
+      "avg_time_s": 0.21913085270673036,
+      "type": "traditional"
+    },
+    "WVF-Np15": {
+      "ODS": 0.0,
+      "OIS": 0.0,
+      "AP": 0.0,
+      "avg_time_s": 7.348713198304177,
+      "type": "wvf_lf",
+      "note": "BSDS500 subset, Np=15, 18 orientations, resized to 64x64",
+      "n_images": 10
+    },
+    "LF-m3-Np15": {
+      "ODS": 0.0,
+      "OIS": 0.0,
+      "AP": 0.0,
+      "avg_time_s": 26.387088764086364,
+      "type": "wvf_lf",
+      "note": "BSDS500 subset, m=3, Np=15, 18 orientations, subsample=2, resized to 64x64",
+      "n_images": 5
+    },
+    "TEED": {
+      "ODS": 0.47011941739921465,
+      "OIS": 0.47138358966600946,
+      "AP": 0.33308101799602063,
+      "avg_time_s": 0.09871465187519789,
+      "type": "ml",
+      "n_images": 50,
+      "note": "PyTorch inference on cpu"
+    },
+    "DexiNed": {
+      "ODS": 0.4950448624963871,
+      "OIS": 0.5040910913216878,
+      "AP": 0.39581009366850783,
+      "avg_time_s": 0.4382972479984164,
+      "type": "ml",
+      "n_images": 50,
+      "note": "PyTorch inference on cpu"
+    }
   }
 }

@@ -1,0 +1,49 @@
+{
+  "tag": "a100",
+  "hostname": "node035",
+  "platform": "Linux-5.14.0-362.8.1.el9_3.x86_64-x86_64-with-glibc2.34",
+  "python_executable": "/home/apps/anaconda/3.12/bin/python",
+  "slurm": {
+    "job_id": "348186",
+    "job_name": "gpu-probe",
+    "partition": "gpu-A100",
+    "nodelist": "node035",
+    "gpus": null,
+    "gres": null,
+    "cpus_per_task": "4"
+  },
+  "env": {
+    "CUDA_VISIBLE_DEVICES": "0",
+    "LD_LIBRARY_PATH": "/home/apps/cuda/12.1/extras/CUPTI/lib64:/home/apps/cuda/12.1/lib64:/home/apps/anaconda/3.12/lib:/cm/shared/apps/slurm/current/lib64/slurm:/cm/shared/apps/slurm/current/lib64:/cm/local/apps/gcc/13.1.0/lib:/cm/local/apps/gcc/13.1.0/lib64:/cm/local/apps/gcc/13.1.0/lib32"
+  },
+  "torch": {
+    "version": "2.3.1+cu121",
+    "cuda_version": "12.1",
+    "cudnn_version": 8902,
+    "cuda_available": true,
+    "device_count": 1
+  },
+  "nvidia_smi": {
+    "cmd": [
+      "nvidia-smi",
+      "--query-gpu=index,name,memory.total,driver_version",
+      "--format=csv,noheader"
+    ],
+    "returncode": 0,
+    "stdout": "0, NVIDIA A100-SXM4-40GB, 40960 MiB, 580.82.07\n1, NVIDIA A100-SXM4-40GB, 40960 MiB, 580.82.07\n2, NVIDIA A100-SXM4-40GB, 40960 MiB, 580.82.07\n3, NVIDIA A100-SXM4-40GB, 40960 MiB, 580.82.07",
+    "stderr": ""
+  },
+  "devices": [
+    {
+      "index": 0,
+      "name": "NVIDIA A100-SXM4-40GB",
+      "capability": [
+        8,
+        0
+      ],
+      "matmul_ok": true,
+      "matmul_seconds": 0.6672912426292896,
+      "checksum": -26.30979347229004
+    }
+  ]
+}
