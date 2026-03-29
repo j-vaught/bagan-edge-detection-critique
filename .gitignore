@@ -7,14 +7,10 @@ build/
 *.swp
 *.swo
 .DS_Store
-slurm-*.out
-slurm-*.err
-DexiNed/
-EDTER/
-EdgeNAT/
-NBED/
-pidinet/
+*.out
+*.err
 models/
 datasets/BSDS500/
 datasets/UDED/
+datasets/BIPED/
 ~/

@@ -1,7 +1,7 @@
 """GPU-accelerated Line Filter using PyTorch CUDA.
 
 Fuses all (2*half_width+1) line offsets into a single batched matmul
-per orientation, fully saturating the GPU.
+per orientation. Supports pixel batching to fit within a VRAM budget.
 """
 
 from __future__ import annotations
@@ -18,6 +18,25 @@ from edgecritic.wvf._cuda import _precompute_pseudoinverses
 logger = logging.getLogger("edgecritic")
 
 
+def _estimate_batch_size(L: int, Np: int, vram_bytes: int) -> int:
+    """Estimate how many pixels fit in one batch given a VRAM budget.
+
+    Per batch of B pixels, peak memory is roughly:
+      - index tensors: 2 * L * B * Np * 8  (int64 nb_y, nb_x)
+      - virtual coords: 2 * L * B * 8      (int64 virtual_y, virtual_x)
+      - gather tensor: L * B * Np * 4       (float32 F_all)
+      - flat tensor:   L * B * Np * 4       (float32 F_flat, may coexist)
+      - matmul result: L * B * 4            (float32 fx_all)
+    Total ≈ B * L * (Np * 24 + 20)
+
+    We use 50% of the budget to account for PyTorch allocator overhead,
+    fragmentation, and the image tensor itself.
+    """
+    per_pixel = L * (Np * 24 + 20)
+    batch = int(vram_bytes * 0.5 / max(per_pixel, 1))
+    return max(batch, 256)  # minimum 256 pixels per batch
+
+
 def lf_image_cuda(
     image: np.ndarray,
     half_width: int = 7,
@@ -25,6 +44,7 @@ def lf_image_cuda(
     order: int = 4,
     n_orientations: int = 36,
     device: str | torch.device = "cuda",
+    max_vram_gb: float | None = None,
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     """GPU-accelerated Line Filter.
 
@@ -42,6 +62,10 @@ def lf_image_cuda(
         Number of orientations to sweep.
     device : str
         PyTorch device.
+    max_vram_gb : float, optional
+        Maximum VRAM to use in GB. If None, auto-detects from the device
+        (uses 80% of free memory). Set this to control memory usage
+        explicitly, e.g. ``max_vram_gb=30`` for a 40 GB GPU.
 
     Returns
     -------
@@ -74,14 +98,29 @@ def lf_image_cuda(
     ys = torch.arange(border, H - border, device=device)
     xs = torch.arange(border, W - border, device=device)
     grid_y, grid_x = torch.meshgrid(ys, xs, indexing="ij")
-    flat_y = grid_y.reshape(-1).float()
-    flat_x = grid_x.reshape(-1).float()
+    flat_y = grid_y.reshape(-1).long()
+    flat_x = grid_x.reshape(-1).long()
     N = int(flat_y.shape[0])
 
     dx = torch.tensor(offsets[:, 0], dtype=torch.long, device=device)
     dy = torch.tensor(offsets[:, 1], dtype=torch.long, device=device)
 
+    # Determine batch size from VRAM budget
+    if max_vram_gb is not None:
+        vram_budget = int(max_vram_gb * 1e9)
+    else:
+        vram_budget = int(torch.cuda.mem_get_info(device)[0] * 0.8)
+
+    batch_size = _estimate_batch_size(L, np_count, vram_budget)
+    n_batches = (N + batch_size - 1) // batch_size
+
     t1 = time.perf_counter()
+    if n_batches > 1:
+        logger.debug(
+            "lf_image_cuda: batching %d pixels into %d batches of %d "
+            "(L=%d, Np=%d, budget=%.1fGB)",
+            N, n_batches, batch_size, L, np_count, vram_budget / 1e9,
+        )
 
     best_response = torch.zeros(N, device=device)
     best_angle_idx = torch.zeros(N, dtype=torch.long, device=device)
@@ -99,28 +138,42 @@ def lf_image_cuda(
             dtype=torch.long, device=device,
         )
 
-        flat_y_long = flat_y.long()
-        flat_x_long = flat_x.long()
+        for bi in range(n_batches):
+            s = bi * batch_size
+            e = min(s + batch_size, N)
+            by = flat_y[s:e]
+            bx = flat_x[s:e]
+            B = e - s
 
-        virtual_y = flat_y_long.unsqueeze(0) + line_dy.unsqueeze(1)
-        virtual_x = flat_x_long.unsqueeze(0) + line_dx.unsqueeze(1)
+            # (L, B) virtual pixel positions along the line
+            virtual_y = by.unsqueeze(0) + line_dy.unsqueeze(1)  # (L, B)
+            virtual_x = bx.unsqueeze(0) + line_dx.unsqueeze(1)  # (L, B)
 
-        nb_y = virtual_y.unsqueeze(2) + dy.unsqueeze(0).unsqueeze(0)
-        nb_x = virtual_x.unsqueeze(2) + dx.unsqueeze(0).unsqueeze(0)
+            # (L, B, Np) neighbor positions
+            nb_y = virtual_y.unsqueeze(2) + dy.unsqueeze(0).unsqueeze(0)
+            nb_x = virtual_x.unsqueeze(2) + dx.unsqueeze(0).unsqueeze(0)
 
-        F_all = img_t[nb_y, nb_x]
+            # Gather intensities and compute f_x
+            F_all = img_t[nb_y, nb_x]           # (L, B, Np)
+            del nb_y, nb_x, virtual_y, virtual_x
+            F_flat = F_all.reshape(L * B, -1)   # (L*B, Np)
+            del F_all
+            fx_all = F_flat @ P_fx[oi]           # (L*B,)
+            del F_flat
 
-        F_flat = F_all.reshape(L * N, -1)
+            # Weighted sum along the line
+            fx_lines = fx_all.reshape(L, B)      # (L, B)
+            del fx_all
+            weighted_fx = (weights_t.unsqueeze(1) * fx_lines).sum(dim=0)  # (B,)
+            del fx_lines
+            response = torch.abs(weighted_fx)
 
-        fx_all = F_flat @ P_fx[oi]
-
-        fx_lines = fx_all.reshape(L, N)
-        weighted_fx = (weights_t.unsqueeze(1) * fx_lines).sum(dim=0)
-        response = torch.abs(weighted_fx)
-
-        improved = response > best_response
-        best_response = torch.where(improved, response, best_response)
-        best_angle_idx = torch.where(improved, torch.tensor(oi, device=device), best_angle_idx)
+            # Update best for this batch
+            improved = response > best_response[s:e]
+            best_response[s:e] = torch.where(improved, response, best_response[s:e])
+            best_angle_idx[s:e] = torch.where(
+                improved, torch.tensor(oi, device=device), best_angle_idx[s:e]
+            )
 
     t2 = time.perf_counter()
 
@@ -128,8 +181,8 @@ def lf_image_cuda(
     gradient_angle = np.zeros((H, W), dtype=np.float64)
     condition_numbers = np.zeros((H, W), dtype=np.float64)
 
-    flat_y_np = flat_y.long().cpu().numpy()
-    flat_x_np = flat_x.long().cpu().numpy()
+    flat_y_np = flat_y.cpu().numpy()
+    flat_x_np = flat_x.cpu().numpy()
     gradient_mag[flat_y_np, flat_x_np] = best_response.cpu().numpy()
     gradient_angle[flat_y_np, flat_x_np] = angles[best_angle_idx.cpu().numpy()]
 
@@ -137,8 +190,10 @@ def lf_image_cuda(
 
     logger.debug(
         "lf_image_cuda: precompute=%.3fs compute=%.3fs transfer=%.3fs "
-        "total=%.3fs pixels=%d orientations=%d line_length=%d",
+        "total=%.3fs pixels=%d orientations=%d line_length=%d batches=%d "
+        "vram_budget=%.1fGB",
         t1 - t0, t2 - t1, t3 - t2, t3 - t0, N, n_orientations, L,
+        n_batches, vram_budget / 1e9,
     )
 
     return gradient_mag, gradient_angle, condition_numbers

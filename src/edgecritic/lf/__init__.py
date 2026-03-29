@@ -31,6 +31,7 @@ def lf_image(
     subsample: int = 1,
     backend: str = "auto",
     device: str = "cuda",
+    max_vram_gb: float | None = None,
 ) -> EdgeResult:
     """Apply the Line Filter to an image.
 
@@ -56,6 +57,10 @@ def lf_image(
         'auto', 'cpu', or 'cuda'.
     device : str
         PyTorch device (only used when backend='cuda').
+    max_vram_gb : float, optional
+        Maximum VRAM budget in GB for the CUDA backend. If None,
+        auto-detects from free device memory. Pixels are processed
+        in batches sized to fit within this budget.
 
     Returns
     -------
@@ -70,6 +75,7 @@ def lf_image(
         mag, angle, cond = lf_image_cuda(
             image, half_width=half_width, np_count=np_count,
             order=order, n_orientations=n_orientations, device=device,
+            max_vram_gb=max_vram_gb,
         )
         return EdgeResult(
             gradient_mag=mag,
