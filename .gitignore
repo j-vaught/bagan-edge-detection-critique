@@ -1,7 +1,3 @@
-papers/
-results/*.png
-results/*.pdf
-results/*.npy
 __pycache__/
 *.pyc
 *.egg-info/
@@ -13,24 +9,6 @@ build/
 .DS_Store
 slurm-*.out
 slurm-*.err
-build_paper.*.out
-build_paper.*.err
-paper/*.log
-paper/*.aux
-paper/*.out
-paper/critique_*.pdf
-paper/agent_drafts/*.log
-paper/agent_drafts/*.aux
-paper/agent_drafts/*.out
-paper/agent_drafts/sections/*.aux
-paper/agent_drafts/sections/*.out
-paper/agent_drafts/
-paper/independent_papers/**/paper.log
-paper/independent_papers/**/paper.aux
-paper/independent_papers/**/paper.out
-paper/independent_papers/**/build_*.out
-paper/independent_papers/**/build_*.err
-paper/independent_papers/**/texmfhome/
 DexiNed/
 EDTER/
 EdgeNAT/
@@ -41,6 +19,3 @@ datasets/BSDS500_repo/
 datasets/UDED_repo/
 datasets/maritime/images/*.jpeg
 ~/
-Wide View and Line Filter for Enhanced Image Gradient Computation.pdf
-Wide_View_and_Line_Filter_for_Enhanced_Gradient_Computation_in_Aquatic_Environment.pdf
-Multi-Scale_and_Multi-Domain_Edge_Determination_with_Accurate_Gradient_Orientation_Computation_in_Aquatic_Environment.pdf
