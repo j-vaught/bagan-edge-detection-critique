@@ -19,5 +19,5 @@ echo "Node: $(hostname)"
 nvidia-smi --query-gpu=name,memory.total --format=csv,noheader
 echo
 
-cd $HOME/edge-detection-filter-critique/src
-python -u wvf_cuda.py
+cd $HOME/edge-detection-filter-critique
+python -u scripts/run_cuda_test.py

@@ -1,5 +1,4 @@
-"""
-Run all critique experiments and generate the final report.
+"""Run all critique experiments and generate the final report.
 
 This script orchestrates:
 1. Synthetic image generation
@@ -18,34 +17,24 @@ matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).parent))
-
-from wvf_lf import (
-    wvf_image, lf_image, cubic_spline_angle, arctan_angle,
-    analyze_condition_numbers, wvf_single_pixel, build_taylor_matrix,
-    get_circular_neighbors, rotate_coordinates
+from edgecritic.wvf import wvf_image
+from edgecritic.wvf._cpu import wvf_single_pixel
+from edgecritic.lf import lf_image
+from edgecritic.core.taylor import build_taylor_matrix, get_circular_neighbors, rotate_coordinates
+from edgecritic.angles import cubic_spline_angle, arctan_angle
+from edgecritic.baselines import sobel_gradients, prewitt_gradients, canny_edges
+from edgecritic.evaluation import (
+    compute_ods_ois, angular_error_deg, runtime_comparison,
+    analyze_condition_numbers, wvf_orientation_profile,
 )
-from baselines import (
-    sobel_gradients, prewitt_gradients, extended_sobel_gradients,
-    canny_edges, runtime_comparison
-)
-from synthetic import (
+from edgecritic.synthetic import (
     create_multi_angle_line_image, create_step_edge_image,
-    create_parallel_line_image
+    create_parallel_line_image,
 )
 
 
 RESULTS_DIR = Path(__file__).parent.parent / "results"
 RESULTS_DIR.mkdir(exist_ok=True)
-
-
-def angular_error_deg(pred_deg, true_deg):
-    """Smallest orientation error modulo 180 degrees."""
-    return min(
-        abs(pred_deg - true_deg),
-        abs(pred_deg - true_deg + 180.0),
-        abs(pred_deg - true_deg - 180.0),
-    )
 
 
 def sample_parallel_line_points(size, angle_deg, n_points=7, offset_step=10):
@@ -61,16 +50,6 @@ def sample_parallel_line_points(size, angle_deg, n_points=7, offset_step=10):
         py = int(round(cy + offset * offset_step * sin_a))
         points.append((px, py))
     return points
-
-
-def wvf_orientation_profile(image, x, y, np_count=15, order=4, n_orientations=18):
-    """Evaluate WVF derivative magnitude at one pixel across orientations."""
-    angles = np.linspace(0, np.pi, n_orientations, endpoint=False)
-    profile = []
-    for theta in angles:
-        fx, _, _ = wvf_single_pixel(image, x, y, np_count=np_count, order=order, theta=theta)
-        profile.append(abs(fx))
-    return angles, np.array(profile)
 
 
 def test_condition_numbers():
@@ -120,7 +99,7 @@ def test_condition_numbers():
 
 
 def test_angle_accuracy():
-    """Test 2: Cubic spline vs arctan angle detection (Paper 3, Table 1)."""
+    """Test 2: Cubic spline vs arctan angle detection."""
     print("\n" + "=" * 60)
     print("TEST 2: Angle Detection Accuracy (Spline vs Arctan)")
     print("=" * 60)
@@ -180,8 +159,8 @@ def test_angle_accuracy():
                 angles_rad, profile = wvf_orientation_profile(
                     img, best_x, best_y, np_count=15, order=4, n_orientations=18
                 )
-                spline_angle, _, _ = cubic_spline_angle(profile, angles_rad)
-                spline_pred_deg = np.degrees(spline_angle)
+                spline_angle_val, _, _ = cubic_spline_angle(profile, angles_rad)
+                spline_pred_deg = np.degrees(spline_angle_val)
                 spline_err = angular_error_deg(spline_pred_deg, true_angle)
                 point_spline_errors.append(spline_err)
 
@@ -195,7 +174,7 @@ def test_angle_accuracy():
                 detailed_rows.append((true_angle, sobel_med, spline_med, sobel_med - spline_med))
             print(
                 f"  SNR={snr:.2f} angle={true_angle:.1f}: "
-                f"Sobel={sobel_med:.3f}°, Spline={spline_med:.3f}°"
+                f"Sobel={sobel_med:.3f}, Spline={spline_med:.3f}"
             )
 
         per_snr.append({
@@ -216,7 +195,7 @@ def test_angle_accuracy():
     ax.bar(x - width/2, [row[1] for row in detailed_rows], width, label='Sobel arctan')
     ax.bar(x + width/2, [row[2] for row in detailed_rows], width, label='WVF + spline')
     ax.set_xticks(x)
-    ax.set_xticklabels([f"{row[0]:.1f}°" for row in detailed_rows], rotation=45, ha='right')
+    ax.set_xticklabels([f"{row[0]:.1f}" for row in detailed_rows], rotation=45, ha='right')
     ax.set_ylabel('Median Angular Error (degrees)')
     ax.set_title('Angle Error by True Edge Normal (SNR=2.0, Np=15)')
     ax.grid(axis='y', alpha=0.3)
@@ -260,7 +239,7 @@ def test_angle_accuracy():
 
 
 def test_snr_robustness():
-    """Test 3: Edge detection at different SNR levels (IEEE 2024, Fig. 3)."""
+    """Test 3: Edge detection at different SNR levels."""
     print("\n" + "=" * 60)
     print("TEST 3: SNR Robustness")
     print("=" * 60)
@@ -329,7 +308,7 @@ def test_snr_robustness():
 
 
 def test_runtime_scaling():
-    """Test 4: Runtime comparison addressing compute fairness critique."""
+    """Test 4: Runtime comparison."""
     print("\n" + "=" * 60)
     print("TEST 4: Runtime Comparison")
     print("=" * 60)
@@ -352,13 +331,13 @@ def test_runtime_scaling():
         print(f"  32x32 {name}: {data['mean_time']:.6f}s ({us_per_pixel:.2f} us/pixel)")
 
     wvf_start = time.time()
-    wvf_image(same_region, np_count=15, order=4, n_orientations=18)
+    wvf_image(same_region, np_count=15, order=4, n_orientations=18, backend="cpu")
     wvf_time = time.time() - wvf_start
 
     lf_start = time.time()
     lf_image(
         same_region, half_width=3, np_count=15,
-        order=4, n_orientations=18, subsample=2
+        order=4, n_orientations=18, subsample=2, backend="cpu"
     )
     lf_time = time.time() - lf_start
 

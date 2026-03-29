@@ -1,11 +1,4 @@
-"""
-Synthetic test image generation for verifying WVF/LF claims.
-
-Generates images matching those described in:
-  - Thesis Ch. 4, Fig. 4.1 (multi-angle line image)
-  - IEEE 2024, Fig. 3 (variable SNR multi-line)
-  - IEEE 2025, Fig. 4 / Table 1 (angle detection test)
-"""
+"""Synthetic test image generation for verifying WVF/LF behavior."""
 
 import numpy as np
 from pathlib import Path
@@ -13,11 +6,7 @@ from pathlib import Path
 
 def create_multi_angle_line_image(size=256, line_width=2, angles_deg=None,
                                   snr=2.0, background=128):
-    """
-    Create a synthetic image with lines at multiple known angles.
-
-    Matches the test setup described in the thesis (Fig. 4.1) and
-    IEEE papers (Fig. 3). Lines radiate from center at specified angles.
+    """Create a synthetic image with lines at multiple known angles.
 
     Parameters
     ----------
@@ -26,8 +15,7 @@ def create_multi_angle_line_image(size=256, line_width=2, angles_deg=None,
     line_width : int
         Width of each line in pixels.
     angles_deg : list of float
-        Line angles in degrees. Default matches Paper 3, Table 1:
-        [0, 23, 63.5, 90, 135, 174]
+        Line angles in degrees. Default: [0, 23, 63.5, 90, 135, 174].
     snr : float
         Signal-to-noise ratio. SNR = signal_amplitude / noise_std.
     background : float
@@ -83,10 +71,7 @@ def create_multi_angle_line_image(size=256, line_width=2, angles_deg=None,
 def create_parallel_line_image(size=256, n_lines=5, spacing=30,
                                 angle_deg=90, line_width=2,
                                 snr=2.0, background=128):
-    """
-    Create image with parallel lines at a single angle.
-
-    Useful for testing angular consistency along the same edge direction.
+    """Create image with parallel lines at a single angle.
 
     Parameters
     ----------
@@ -154,8 +139,7 @@ def create_parallel_line_image(size=256, n_lines=5, spacing=30,
 
 def create_step_edge_image(size=256, edge_angle_deg=45, snr=2.0,
                             high_val=200, low_val=50):
-    """
-    Create a simple step edge for gradient magnitude testing.
+    """Create a simple step edge for gradient magnitude testing.
 
     Parameters
     ----------
@@ -205,13 +189,7 @@ def create_step_edge_image(size=256, edge_angle_deg=45, snr=2.0,
 
 
 def generate_all_test_images(output_dir="results"):
-    """
-    Generate the full suite of synthetic test images.
-
-    Creates images matching the experimental conditions in all three papers:
-    1. Multi-angle lines at SNR = 0.5, 0.75, 1.0, 2.0
-    2. Parallel lines for angular consistency testing
-    3. Step edges for gradient magnitude testing
+    """Generate the full suite of synthetic test images.
 
     Parameters
     ----------
@@ -251,7 +229,3 @@ def generate_all_test_images(output_dir="results"):
         print(f"  edge angle={angle}deg")
 
     print("All test images generated.")
-
-
-if __name__ == "__main__":
-    generate_all_test_images()

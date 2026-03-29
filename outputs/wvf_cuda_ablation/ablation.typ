@@ -1,4 +1,4 @@
-#set page(margin: 1in)
+#set page(paper: "us-letter", margin: 1in)
 #set text(font: "New Computer Modern", size: 11pt)
 #set par(justify: true, leading: 0.65em)
 #set heading(numbering: "1.")
