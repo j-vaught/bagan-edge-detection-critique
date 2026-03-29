@@ -15,7 +15,6 @@ EdgeNAT/
 NBED/
 pidinet/
 models/
-datasets/BSDS500_repo/
-datasets/UDED_repo/
-datasets/maritime/images/*.jpeg
+datasets/BSDS500/
+datasets/UDED/
 ~/
