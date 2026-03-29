@@ -6,7 +6,7 @@
 #SBATCH --cpus-per-task=8
 #SBATCH --gres=gpu:1
 #SBATCH --mem=128G
-#SBATCH --time=15:00:00
+#SBATCH --time=36:00:00
 #SBATCH --output=slurm-full-ablation-%j.out
 #SBATCH --error=slurm-full-ablation-%j.err
 
